@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BMS 実力推定・総合クリア評価ツール (GitHub Pages版)</title>
+    <title>Stella_Rating</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
     <style>
         body { font-family: sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 10px; line-height: 1.6; color: #333; }
@@ -56,8 +56,8 @@
 </head>
 <body>
 
-    <h1>BMS 実力推定・総合クリア評価ツール</h1>
-    <p>難易度表ファイルを自動読込します。STEP 1でスコアDBを選択し、ボタンを押してください。</p>
+    <h1>Stella/Satellite難易度表実力評価ツール Stella_Rating</h1>
+    <p>Score.dbを選択し、実行ボタンを押してください。</p>
 
     <div class="box">
         <h3>STEP 1: スコアデータベース（.dbファイル）を選択</h3>
@@ -66,8 +66,8 @@
     </div>
 
     <p style="text-align: center;">
-        <button id="runBtn">総合評価と実力推定を実行</button>
-        <button id="downloadBtn" disabled>CSVとしてダウンロード</button>
+        <button id="runBtn">処理を実行</button>
+        <button id="downloadBtn" disabled>CSV形式でダウンロード</button>
     </p>
 
     <h3>処理結果ログ</h3>
@@ -76,7 +76,6 @@
     <div class="rating-card" id="ratingCard">
         <div class="rating-title">総合実力指標 (Total Rating)</div>
         <div class="rating-value" id="ratingValue">0.00</div>
-        <div class="rating-desc">※ 計算式: (上位10曲の単曲レート×2 + 11〜30位の単曲レート合計) / 40</div>
     </div>
 
     <div id="previewArea" style="display:none;">
