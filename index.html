@@ -18,14 +18,11 @@
         #downloadBtn:hover { background-color: #218838; }
         #saveImgBtn { background-color: #17a2b8; }
         #saveImgBtn:hover { background-color: #138496; }
-        #output { white-space: pre-wrap; background: #222; color: #fff; padding: 15px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; }
-        .success { color: #28a745; font-weight: bold; }
-        .error { color: #dc3545; font-weight: bold; }
-        .info { color: #17a2b8; }
         
         /* X（Twitter）ボタンのブランドカラー（黒/ダークモード風） */
         #shareXBtn { background-color: #14171A; }
         #shareXBtn:hover { background-color: #272c30; }
+        
         #output { white-space: pre-wrap; background: #222; color: #fff; padding: 15px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; }
         .success { color: #28a745; font-weight: bold; }
         .error { color: #dc3545; font-weight: bold; }
@@ -133,6 +130,7 @@
         let jsonMetaMap = {}; 
         let isJsonReady = false;
         let finalResultList = [];
+        let currentTotalRating = "0.00"; // シェア用にグローバルで保持
         // CSV出力用のヘッダー定義
         const allHeaders = ['順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
 
@@ -179,11 +177,10 @@
             let count = 0;
             items.forEach(item => {
                 if (item && item.md5) {
-                    // levelの表記揺れ対策（既にsl/stが付いていればそのまま、無ければ付与する）
                     let rawLevel = item.level !== undefined ? String(item.level) : "-";
                     let formattedLevel = rawLevel;
                     if (!rawLevel.toLowerCase().startsWith('sl') && !rawLevel.toLowerCase().startsWith('st')) {
-                        formattedLevel = type + rawLevel; // 例: "12" -> "sl12" / "0" -> "st0"
+                        formattedLevel = type + rawLevel; 
                     }
 
                     jsonMetaMap[item.md5.toLowerCase()] = {
@@ -222,6 +219,7 @@
             log("\n--- Total Ratingを算出します ---");
             document.getElementById('downloadBtn').disabled = true;
             document.getElementById('saveImgBtn').disabled = true;
+            document.getElementById('shareXBtn').disabled = true; // ★計算開始時にロック
             document.getElementById('resultCaptureArea').style.display = 'none';
             document.getElementById('previewArea').style.display = 'none';
             document.getElementById('ratingCard').style.display = 'none';
@@ -329,12 +327,11 @@
                     });
                     
                     let totalRating = weightedSum / 40;
-                    currentTotalRating = totalRating.toFixed(2); // シェア用に保存
+                    currentTotalRating = totalRating.toFixed(2); 
                     
-                    // 表示エリアの可視化
                     document.getElementById('resultCaptureArea').style.display = 'block';
                     document.getElementById('ratingCard').style.display = 'block';
-                    document.getElementById('ratingValue').innerText = totalRating.toFixed(2);
+                    document.getElementById('ratingValue').innerText = currentTotalRating;
                     document.getElementById('previewArea').style.display = 'block';
 
                     const tbody = document.getElementById('previewBody');
@@ -362,8 +359,9 @@
                     });
 
                     document.getElementById('downloadBtn').disabled = false;
-                    document.getElementById('saveImgBtn').disabled = false; // 画像保存を有効化
-                    log(`Total Ratingの算出に成功しました。画像保存も可能です。`, "success");
+                    document.getElementById('saveImgBtn').disabled = false; 
+                    document.getElementById('shareXBtn').disabled = false; // ★計算完了時にロック解除！
+                    log(`Total Ratingの算出に成功しました。画像保存やXへのシェアも可能です。`, "success");
                 } else {
                     log("対象となる有効なスコアデータがありませんでした。");
                 }
@@ -382,7 +380,7 @@
             log("リザルト画像を生成中...");
             
             html2canvas(target, {
-                scale: 2, // 高画質化
+                scale: 2, 
                 useCORS: true,
                 backgroundColor: "#ffffff"
             }).then(canvas => {
@@ -400,28 +398,25 @@
             });
         });
 
-// 【新設：X（Twitter）シェアロジック】
+        // X（Twitter）シェアロジック
         document.getElementById('shareXBtn').addEventListener('click', function() {
             const target = document.getElementById('resultCaptureArea');
             if (!target) return;
 
             log("リザルトをキャプチャしてクリップボードにコピー中...");
             
-            // 1. html2canvasでコンテナを画像（Blob）に変換
             html2canvas(target, {
-                scale: 2, // 高画質
+                scale: 2, 
                 useCORS: true,
                 backgroundColor: "#ffffff"
             }).then(canvas => {
                 canvas.toBlob(async (blob) => {
                     try {
-                        // 2. 画像をクリップボードに書き込み
                         await navigator.clipboard.write([
                             new ClipboardItem({ "image/png": blob })
                         ]);
-                        log("✓ 画像をクリップボードにコピーしました。(Xの投稿画面に貼り付けられます)", "success");
+                        log("✓ 画像をクリップボードにコピーしました。(Xの投稿画面に Ctrl+V で貼り付けられます)", "success");
                         
-                        // 3. Xの投稿ウィンドウを自動で開く（テキスト文面付き）
                         const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\n`);
                         const shareUrl = `https://x.com/intent/tweet?text=${shareText}`;
                         
@@ -434,7 +429,6 @@
                 log("画像生成中にエラーが発生しました: " + err.message, "error");
             });
         });
-
 
         // CSVダウンロード
         document.getElementById('downloadBtn').addEventListener('click', function() {
