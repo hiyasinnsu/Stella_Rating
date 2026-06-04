@@ -19,7 +19,7 @@
         #saveImgBtn { background-color: #17a2b8; }
         #saveImgBtn:hover { background-color: #138496; }
         
-        /* X（Twitter）ボタンのブランドカラー（黒/ダークモード風） */
+        /* X（Twitter）ボタンのブランドカラー */
         #shareXBtn { background-color: #14171A; }
         #shareXBtn:hover { background-color: #272c30; }
         
@@ -60,7 +60,6 @@
         /* 上位10件専用のプレミアムハイライト */
         .top10 { background-color: #fce5cd !important; font-weight: bold; }
         .top10 .rank-col { color: #b45f06; }
-        .highlight-rate { color: #b45f06; font-weight: bold; }
         .score-idx { color: #0056b3; }
         
         /* ランプごとの指定文字色 */
@@ -85,7 +84,7 @@
         <button id="runBtn">処理を実行</button>
         <button id="downloadBtn" disabled>CSV形式でダウンロード</button>
         <button id="saveImgBtn" disabled>PNG形式でダウンロード</button>
-        <button id="shareXBtn" disabled>クリップボードに保存してXでシェア</button>
+        <button id="shareXBtn" disabled>X（Twitter）にシェア</button>
     </p>
 
     <h3>処理結果ログ</h3>
@@ -130,9 +129,48 @@
         let jsonMetaMap = {}; 
         let isJsonReady = false;
         let finalResultList = [];
-        let currentTotalRating = "0.00"; // シェア用にグローバルで保持
-        // CSV出力用のヘッダー定義
+        let currentTotalRating = "0.00"; 
         const allHeaders = ['順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
+
+        // 【新設：0〜25の範囲でご指定のグラデーションカラーを計算する関数】
+        function getRateColor(val) {
+            // 範囲を0〜25に制限
+            let v = Math.max(0, Math.min(25, val));
+            
+            // ご指定のグラデーションの10色のRGB基準値
+            const colors = [
+                { r:  0, g: 191, b: 255 }, // 0: 水色 (DeepSkyBlue)
+                { r:  34, g: 139, b:  34 }, // 1: 緑 (ForestGreen)
+                { r: 154, g: 205, b:  50 }, // 2: 黄緑 (YellowGreen)
+                { r: 255, g: 215, b:   0 }, // 3: 黄色 (Gold)
+                { r: 255, g: 140, b:   0 }, // 4: オレンジ (DarkOrange)
+                { r: 220, g:  20, b:  60 }, // 5: 赤 (Crimson)
+                { r: 255, g:  20, b: 147 }, // 6: ピンク (DeepPink)
+                { r: 148, g:   0, b: 211 }, // 7: 紫 (DarkViolet)
+                { r: 106, g:  90, b: 205 }, // 8: 青紫 (SlateBlue)
+                { r:   0, g:   0, b: 128 }  // 9: 紺色 (Navy)
+            ];
+
+            // 0〜25の数値を、9つの区間にマッピングする
+            let position = (v / 25) * (colors.length - 1);
+            let index = Math.floor(position);
+            let fraction = position - index;
+
+            if (index >= colors.length - 1) {
+                let c = colors[colors.length - 1];
+                return `rgb(${c.r}, ${c.g}, ${c.b})`;
+            }
+
+            // 現在の区間の2色間で線形補間（スムーズに色が繋がるようにブレンド）
+            let c1 = colors[index];
+            let c2 = colors[index + 1];
+
+            let r = Math.round(c1.r + (c2.r - c1.r) * fraction);
+            let g = Math.round(c1.g + (c2.g - c1.g) * fraction);
+            let b = Math.round(c1.b + (c2.b - c1.b) * fraction);
+
+            return `rgb(${r}, ${g}, ${b})`;
+        }
 
         window.addEventListener('DOMContentLoaded', async () => {
             try {
@@ -219,7 +257,7 @@
             log("\n--- Total Ratingを算出します ---");
             document.getElementById('downloadBtn').disabled = true;
             document.getElementById('saveImgBtn').disabled = true;
-            document.getElementById('shareXBtn').disabled = true; // ★計算開始時にロック
+            document.getElementById('shareXBtn').disabled = true; 
             document.getElementById('resultCaptureArea').style.display = 'none';
             document.getElementById('previewArea').style.display = 'none';
             document.getElementById('ratingCard').style.display = 'none';
@@ -341,9 +379,12 @@
                         const tr = document.createElement('tr');
                         if (index < 10) tr.className = 'top10'; 
                         
+                        // 動的にグラデーションカラーを取得
+                        let rateColor = getRateColor(item['単曲レート']);
+                        
                         tr.innerHTML = `
                             <td class="rank-col">${item['順位']}</td>
-                            <td class="highlight-rate">${item['単曲レート'].toFixed(2)}</td>
+                            <td style="color: ${rateColor}; font-weight: bold;">${item['単曲レート'].toFixed(2)}</td>
                             <td class="score-idx">${item['スコア倍率'].toFixed(4)}</td>
                             <td><b>${item.level}</b></td>
                             <td>${item.title}</td>
@@ -360,7 +401,7 @@
 
                     document.getElementById('downloadBtn').disabled = false;
                     document.getElementById('saveImgBtn').disabled = false; 
-                    document.getElementById('shareXBtn').disabled = false; // ★計算完了時にロック解除！
+                    document.getElementById('shareXBtn').disabled = false; 
                     log(`Total Ratingの算出に成功しました。画像保存やXへのシェアも可能です。`, "success");
                 } else {
                     log("対象となる有効なスコアデータがありませんでした。");
@@ -415,9 +456,9 @@
                         await navigator.clipboard.write([
                             new ClipboardItem({ "image/png": blob })
                         ]);
-                        log("画像をクリップボードにコピーしました。", "success");
+                        log("✓ 画像をクリップボードにコピーしました。(Xの投稿画面に Ctrl+V で貼り付けられます)", "success");
                         
-                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\nhttps://hiyasinnsu.github.io/Stella_Rating/`);
+                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\n`);
                         const shareUrl = `https://x.com/intent/tweet?text=${shareText}`;
                         
                         window.open(shareUrl, '_blank');
