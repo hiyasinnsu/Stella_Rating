@@ -6,7 +6,7 @@
     <title>BMS 実力推定・総合クリア評価ツール (GitHub Pages版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
     <style>
-        body { font-family: sans-serif; max-width: 1050px; margin: 20px auto; padding: 0 10px; line-height: 1.6; color: #333; }
+        body { font-family: sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 10px; line-height: 1.6; color: #333; }
         .box { border: 2px dashed #ccc; padding: 20px; margin-bottom: 15px; background: #f9f9f9; border-radius: 5px; }
         .box:hover { border-color: #888; }
         button { padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
@@ -38,8 +38,12 @@
         th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
         th { background-color: #f2f2f2; }
         
+        /* 順位列のデザイン */
+        .rank-col { font-weight: bold; text-align: center; color: #666; width: 40px; }
+        
         /* 上位10件専用のプレミアムハイライト */
         .top10 { background-color: #fce5cd !important; font-weight: bold; }
+        .top10 .rank-col { color: #b45f06; }
         .highlight-rate { color: #b45f06; font-weight: bold; }
         .score-idx { color: #0056b3; }
         
@@ -52,7 +56,7 @@
 </head>
 <body>
 
-    <h1>BMS 実力推定・総合クリア評価ツール (GitHub Pages対応版)</h1>
+    <h1>BMS 実力推定・総合クリア評価ツール</h1>
     <p>難易度表ファイルを自動読込します。STEP 1でスコアDBを選択し、ボタンを押してください。</p>
 
     <div class="box">
@@ -80,6 +84,7 @@
         <table id="previewTable">
             <thead>
                 <tr>
+                    <th>順位</th>
                     <th>単曲レート</th>
                     <th>スコア倍率</th>
                     <th>level</th>
@@ -100,18 +105,16 @@
     <script>
         let SQL;
         let dbInstance = null;
-        let jsonMetaMap = {}; // 事前読込した難易度データを格納
+        let jsonMetaMap = {}; 
         let isJsonReady = false;
-        const allHeaders = ['単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
+        // CSV出力用のヘッダー定義（順位を追加）
+        const allHeaders = ['順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
 
-        // ページ読み込み時にsql.js初期化と同時に、JSONをバックグラウンドで自動取得
         window.addEventListener('DOMContentLoaded', async () => {
             try {
-                // sql.jsの初期化
                 SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` });
                 log("システム: ライブラリの初期化完了。");
 
-                // 同階層のJSONファイルを自動読込
                 log("難易度表データを自動読込中...");
                 let slCount = await loadJsonFile('sl_score.json', 'sl');
                 log(`Satellite (sl_score.json) から ${slCount} 曲登録しました。`);
@@ -137,10 +140,9 @@
             output.scrollTop = output.scrollHeight;
         }
 
-        // JSONを取得して共通マップへ登録する内部関数
         async function loadJsonFile(url, type) {
             const response = await fetch(url);
-            if (!response.ok) throw new Error(`${url} の読み込みに失敗しました。ファイルが存在するか確認してください。`);
+            if (!response.ok) throw new Error(`${url} の読み込みに失敗しました。`);
             const jsonData = await response.json();
             
             let items = Array.isArray(jsonData) ? jsonData : [];
@@ -151,9 +153,16 @@
             let count = 0;
             items.forEach(item => {
                 if (item && item.md5) {
+                    // levelの表記揺れ対策（既にsl/stが付いていればそのまま、無ければ付与する）
+                    let rawLevel = item.level !== undefined ? String(item.level) : "-";
+                    let formattedLevel = rawLevel;
+                    if (!rawLevel.toLowerCase().startsWith('sl') && !rawLevel.toLowerCase().startsWith('st')) {
+                        formattedLevel = type + rawLevel; // 例: "12" -> "sl12" / "0" -> "st0"
+                    }
+
                     jsonMetaMap[item.md5.toLowerCase()] = {
                         title: item.title || "Unknown",
-                        level: item.level !== undefined ? item.level : "-",
+                        level: formattedLevel, 
                         type: type
                     };
                     count++;
@@ -162,7 +171,6 @@
             return count;
         }
 
-        // DBファイル選択時の処理
         document.getElementById('dbFile').addEventListener('change', function(e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -181,7 +189,6 @@
             reader.readAsArrayBuffer(file);
         });
 
-        // 計算実行
         document.getElementById('runBtn').addEventListener('click', function() {
             if (!isJsonReady) { alert("難易度表JSONの読み込みが完了していません。"); return; }
             if (!dbInstance) { alert("先にSTEP 1でDBファイルを選択してください。"); return; }
@@ -261,9 +268,10 @@
                         let finalScoreValue = baseValue * scoreIndex;
 
                         finalResultList.push({
+                            '順位': 0, // ソート後に連番を割り振る
                             '単曲レート': finalScoreValue,
                             'スコア倍率': scoreIndex,
-                            level: meta.level,
+                            level: meta.level, // slXX / stXX が入る
                             title: meta.title,
                             clear: clearText,
                             lampClass: lampClass,
@@ -280,8 +288,15 @@
                 log(`有効データ: マッチしたクリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
 
                 if (finalResultList.length > 0) {
+                    // 単曲レート順にソート
                     finalResultList.sort((a, b) => b['単曲レート'] - a['単曲レート']);
 
+                    // 順位（1〜）の確定
+                    finalResultList.forEach((item, index) => {
+                        item['順位'] = index + 1;
+                    });
+
+                    // 総合実力指標の計算
                     let weightedSum = 0;
                     finalResultList.forEach((item, index) => {
                         if (index < 10) weightedSum += item['単曲レート'] * 2; 
@@ -302,9 +317,10 @@
                         if (index < 10) tr.className = 'top10'; 
                         
                         tr.innerHTML = `
+                            <td class="rank-col">${item['順位']}</td>
                             <td class="highlight-rate">${item['単曲レート'].toFixed(2)}</td>
                             <td class="score-idx">${item['スコア倍率'].toFixed(4)}</td>
-                            <td>${item.level}</td>
+                            <td><b>${item.level}</b></td>
                             <td>${item.title}</td>
                             <td class="${item.lampClass}">${item.clear}</td>
                             <td>${item.perfect}</td>
