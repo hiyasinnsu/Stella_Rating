@@ -79,7 +79,7 @@
     <p>Score.dbを選択し、実行ボタンを押してください。</p>
 
     <div class="box">
-        <h3>STEP 1: スコアデータベース（.dbファイル）を選択</h3>
+        <h3>スコアデータベース（.dbファイル）を選択</h3>
         <input type="file" id="dbFile" accept=".db">
         <div id="dbStatus"></div>
     </div>
@@ -88,6 +88,7 @@
         <button id="runBtn">処理を実行</button>
         <button id="downloadBtn" disabled>CSV形式でダウンロード</button>
         <button id="saveImgBtn" disabled>PNG形式でダウンロード</button>
+        <button id="shareXBtn" disabled>X（Twitter）にシェア</button>
     </p>
 
     <h3>処理結果ログ</h3>
@@ -102,7 +103,7 @@
         </div>
 
         <div id="previewArea" style="display:none;">
-            <h3 style="margin-top: 20px; border-left: 4px solid #1f4068; padding-left: 8px;">総合評価ランキング プレビュー (上位30件)</h3>
+            <h3 style="margin-top: 20px; border-left: 4px solid #1f4068; padding-left: 8px;">単曲レート 上位30曲</h3>
             <table id="previewTable">
                 <thead>
                     <tr>
@@ -216,9 +217,9 @@
 
         document.getElementById('runBtn').addEventListener('click', function() {
             if (!isJsonReady) { alert("難易度表JSONの読み込みが完了していません。"); return; }
-            if (!dbInstance) { alert("先にSTEP 1でDBファイルを選択してください。"); return; }
+            if (!dbInstance) { alert("先にDBファイルを選択してください。"); return; }
 
-            log("\n--- 総合評価処理を開始します ---");
+            log("\n--- Total Ratingを算出します ---");
             document.getElementById('downloadBtn').disabled = true;
             document.getElementById('saveImgBtn').disabled = true;
             document.getElementById('resultCaptureArea').style.display = 'none';
@@ -312,7 +313,7 @@
                     }
                 });
 
-                log(`有効データ: マッチしたクリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
+                log(`有効データ: クリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
 
                 if (finalResultList.length > 0) {
                     finalResultList.sort((a, b) => b['単曲レート'] - a['単曲レート']);
@@ -328,6 +329,7 @@
                     });
                     
                     let totalRating = weightedSum / 40;
+                    currentTotalRating = totalRating.toFixed(2); // シェア用に保存
                     
                     // 表示エリアの可視化
                     document.getElementById('resultCaptureArea').style.display = 'block';
@@ -361,7 +363,7 @@
 
                     document.getElementById('downloadBtn').disabled = false;
                     document.getElementById('saveImgBtn').disabled = false; // 画像保存を有効化
-                    log(`「Total Rating」の算出に成功しました。画像保存も可能です。`, "success");
+                    log(`Total Ratingの算出に成功しました。画像保存も可能です。`, "success");
                 } else {
                     log("対象となる有効なスコアデータがありませんでした。");
                 }
