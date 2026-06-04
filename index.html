@@ -260,8 +260,8 @@
                         let clearText = "-";
                         let lampClass = "";
                         if (clearValue === 2) { bonus = 0; clearText = "EASY"; lampClass = "lamp-EASY"; }
-                        else if (clearValue === 3) { bonus = 1.5; clearText = "NORMAL"; lampClass = "lamp-NORMAL"; }
-                        else if (clearValue === 4) { bonus = 2.5; clearText = "HARD"; lampClass = "lamp-HARD"; } 
+                        else if (clearValue === 3) { bonus = 1.2; clearText = "NORMAL"; lampClass = "lamp-NORMAL"; }
+                        else if (clearValue === 4) { bonus = 2; clearText = "HARD"; lampClass = "lamp-HARD"; } 
                         else if (clearValue === 5) { bonus = 6; clearText = "FULLCOMBO"; lampClass = "lamp-FC"; }
                         else return; 
 
@@ -279,7 +279,7 @@
 
                         let scoreIndex = 1.0; 
                         if (perf !== null && grt !== null && gd !== null && total && total > 0) {
-                            scoreIndex = (perf * 1.0 + grt * 0.9 + gd * 0.5) / total;
+                            scoreIndex = (perf * 1.0 + grt * 0.9 + gd * 0.8) / total;
                             if (scoreIndex < 0) scoreIndex = 0;
                         }
 
