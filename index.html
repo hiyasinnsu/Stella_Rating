@@ -84,7 +84,7 @@
         <button id="runBtn">処理を実行</button>
         <button id="downloadBtn" disabled>CSV形式でダウンロード</button>
         <button id="saveImgBtn" disabled>PNG形式でダウンロード</button>
-        <button id="shareXBtn" disabled>X（Twitter）にシェア</button>
+        <button id="shareXBtn" disabled>クリップボードに保存してXでシェア</button>
     </p>
 
     <h3>処理結果ログ</h3>
@@ -458,7 +458,7 @@
                         ]);
                         log("✓ 画像をクリップボードにコピーしました。(Xの投稿画面に Ctrl+V で貼り付けられます)", "success");
                         
-                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\n`);
+                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\nhttps://hiyasinnsu.github.io/Stella_Rating/`);
                         const shareUrl = `https://x.com/intent/tweet?text=${shareText}`;
                         
                         window.open(shareUrl, '_blank');
