@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stella_Rating</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body { font-family: sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 10px; line-height: 1.6; color: #333; }
         .box { border: 2px dashed #ccc; padding: 20px; margin-bottom: 15px; background: #f9f9f9; border-radius: 5px; }
@@ -14,11 +15,20 @@
         button:disabled { background-color: #ccc; cursor: not-allowed; }
         #downloadBtn { background-color: #28a745; }
         #downloadBtn:hover { background-color: #218838; }
+        #saveImgBtn { background-color: #17a2b8; }
+        #saveImgBtn:hover { background-color: #138496; }
         #output { white-space: pre-wrap; background: #222; color: #fff; padding: 15px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; }
         .success { color: #28a745; font-weight: bold; }
         .error { color: #dc3545; font-weight: bold; }
         .info { color: #17a2b8; }
         
+        /* 画像化するターゲットエリア全体のスタイル */
+        #resultCaptureArea {
+            background-color: #ffffff;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
         /* 総合実力指標のダッシュボード表示 */
         .rating-card {
             background: linear-gradient(135deg, #1f4068, #162447);
@@ -26,7 +36,7 @@
             padding: 25px;
             border-radius: 8px;
             text-align: center;
-            margin: 20px 0;
+            margin: 10px 0 20px 0;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             display: none;
         }
@@ -34,7 +44,7 @@
         .rating-value { font-size: 48px; font-weight: bold; margin: 5px 0; color: #e4e4e4; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
         .rating-desc { font-size: 12px; opacity: 0.7; }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; background-color: #ffffff; }
         th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
         th { background-color: #f2f2f2; }
         
@@ -68,37 +78,43 @@
     <p style="text-align: center;">
         <button id="runBtn">処理を実行</button>
         <button id="downloadBtn" disabled>CSV形式でダウンロード</button>
+        <button id="saveImgBtn" disabled>画像として保存 (PNG)</button>
     </p>
 
     <h3>処理結果ログ</h3>
     <div id="output">システムロード中...</div>
 
-    <div class="rating-card" id="ratingCard">
-        <div class="rating-title">総合実力指標 (Total Rating)</div>
-        <div class="rating-value" id="ratingValue">0.00</div>
-    </div>
+    <div id="resultCaptureArea" style="display:none;">
 
-    <div id="previewArea" style="display:none;">
-        <h3>総合評価ランキング プレビュー (上位30件)</h3>
-        <table id="previewTable">
-            <thead>
-                <tr>
-                    <th>順位</th>
-                    <th>単曲レート</th>
-                    <th>スコア倍率</th>
-                    <th>level</th>
-                    <th>title</th>
-                    <th>clear</th>
-                    <th>perfect</th>
-                    <th>great</th>
-                    <th>good</th>
-                    <th>bad</th>
-                    <th>poor</th>
-                    <th>totalnotes</th>
-                </tr>
-            </thead>
-            <tbody id="previewBody"></tbody>
-        </table>
+        <div class="rating-card" id="ratingCard">
+            <div class="rating-title">総合実力指標 (Total Rating)</div>
+            <div class="rating-value" id="ratingValue">0.00</div>
+            <div class="rating-desc">※ 計算式: (上位10曲の単曲レート×2 + 11〜30位の単曲レート合計) / 40</div>
+        </div>
+
+        <div id="previewArea" style="display:none;">
+            <h3 style="margin-top: 20px; border-left: 4px solid #1f4068; padding-left: 8px;">総合評価ランキング プレビュー (上位30件)</h3>
+            <table id="previewTable">
+                <thead>
+                    <tr>
+                        <th>順位</th>
+                        <th>単曲レート</th>
+                        <th>スコア倍率</th>
+                        <th>level</th>
+                        <th>title</th>
+                        <th>clear</th>
+                        <th>perfect</th>
+                        <th>great</th>
+                        <th>good</th>
+                        <th>bad</th>
+                        <th>poor</th>
+                        <th>totalnotes</th>
+                    </tr>
+                </thead>
+                <tbody id="previewBody"></tbody>
+            </table>
+        </div>
+
     </div>
 
     <script>
@@ -106,7 +122,8 @@
         let dbInstance = null;
         let jsonMetaMap = {}; 
         let isJsonReady = false;
-        // CSV出力用のヘッダー定義（順位を追加）
+        let finalResultList = [];
+        // CSV出力用のヘッダー定義
         const allHeaders = ['順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
 
         window.addEventListener('DOMContentLoaded', async () => {
@@ -194,6 +211,8 @@
 
             log("\n--- 総合評価処理を開始します ---");
             document.getElementById('downloadBtn').disabled = true;
+            document.getElementById('saveImgBtn').disabled = true;
+            document.getElementById('resultCaptureArea').style.display = 'none';
             document.getElementById('previewArea').style.display = 'none';
             document.getElementById('ratingCard').style.display = 'none';
             finalResultList = [];
@@ -267,10 +286,10 @@
                         let finalScoreValue = baseValue * scoreIndex;
 
                         finalResultList.push({
-                            '順位': 0, // ソート後に連番を割り振る
+                            '順位': 0, 
                             '単曲レート': finalScoreValue,
                             'スコア倍率': scoreIndex,
-                            level: meta.level, // slXX / stXX が入る
+                            level: meta.level, 
                             title: meta.title,
                             clear: clearText,
                             lampClass: lampClass,
@@ -287,15 +306,12 @@
                 log(`有効データ: マッチしたクリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
 
                 if (finalResultList.length > 0) {
-                    // 単曲レート順にソート
                     finalResultList.sort((a, b) => b['単曲レート'] - a['単曲レート']);
 
-                    // 順位（1〜）の確定
                     finalResultList.forEach((item, index) => {
                         item['順位'] = index + 1;
                     });
 
-                    // 総合実力指標の計算
                     let weightedSum = 0;
                     finalResultList.forEach((item, index) => {
                         if (index < 10) weightedSum += item['単曲レート'] * 2; 
@@ -304,10 +320,12 @@
                     
                     let totalRating = weightedSum / 40;
                     
+                    // 表示エリアの可視化
+                    document.getElementById('resultCaptureArea').style.display = 'block';
                     document.getElementById('ratingCard').style.display = 'block';
                     document.getElementById('ratingValue').innerText = totalRating.toFixed(2);
-
                     document.getElementById('previewArea').style.display = 'block';
+
                     const tbody = document.getElementById('previewBody');
                     tbody.innerHTML = '';
                     
@@ -333,7 +351,8 @@
                     });
 
                     document.getElementById('downloadBtn').disabled = false;
-                    log(`「総合実力指標」の算出に成功しました！`, "success");
+                    document.getElementById('saveImgBtn').disabled = false; // 画像保存を有効化
+                    log(`「総合実力指標」の算出に成功しました！画像保存も可能です。`, "success");
                 } else {
                     log("対象となる有効なスコアデータがありませんでした。");
                 }
@@ -342,6 +361,32 @@
                 log("エラーが発生しました: " + err.message, "error");
                 console.error(err);
             }
+        });
+
+        // 画像保存ボタンのイベント
+        document.getElementById('saveImgBtn').addEventListener('click', function() {
+            const target = document.getElementById('resultCaptureArea');
+            if (!target) return;
+
+            log("リザルト画像を生成中...");
+            
+            html2canvas(target, {
+                scale: 2, // 高画質化
+                useCORS: true,
+                backgroundColor: "#ffffff"
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.href = imgData;
+                link.download = `bms_result_rating_${new Date().toISOString().slice(0,10)}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                log("リザルト画像をPNGファイルとして保存しました！", "success");
+            }).catch(err => {
+                log("画像生成中にエラーが発生しました: " + err.message, "error");
+                console.error(err);
+            });
         });
 
         // CSVダウンロード
