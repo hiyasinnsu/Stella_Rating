@@ -22,6 +22,14 @@
         .error { color: #dc3545; font-weight: bold; }
         .info { color: #17a2b8; }
         
+        /* X（Twitter）ボタンのブランドカラー（黒/ダークモード風） */
+        #shareXBtn { background-color: #14171A; }
+        #shareXBtn:hover { background-color: #272c30; }
+        #output { white-space: pre-wrap; background: #222; color: #fff; padding: 15px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; }
+        .success { color: #28a745; font-weight: bold; }
+        .error { color: #dc3545; font-weight: bold; }
+        .info { color: #17a2b8; }
+        
         /* 画像化するターゲットエリア全体のスタイル */
         #resultCaptureArea {
             background-color: #ffffff;
@@ -78,7 +86,7 @@
     <p style="text-align: center;">
         <button id="runBtn">処理を実行</button>
         <button id="downloadBtn" disabled>CSV形式でダウンロード</button>
-        <button id="saveImgBtn" disabled>画像として保存 (PNG)</button>
+        <button id="saveImgBtn" disabled>PNG形式でダウンロード</button>
     </p>
 
     <h3>処理結果ログ</h3>
@@ -87,9 +95,9 @@
     <div id="resultCaptureArea" style="display:none;">
 
         <div class="rating-card" id="ratingCard">
-            <div class="rating-title">総合実力指標 (Total Rating)</div>
+            <div class="rating-title">Total Rating</div>
             <div class="rating-value" id="ratingValue">0.00</div>
-            <div class="rating-desc">※ 計算式: (上位10曲の単曲レート×2 + 11〜30位の単曲レート合計) / 40</div>
+            <div class="rating-desc">※ 計算式: (1～10位の単曲レート×2 + 11〜30位の単曲レート) / 40</div>
         </div>
 
         <div id="previewArea" style="display:none;">
@@ -352,7 +360,7 @@
 
                     document.getElementById('downloadBtn').disabled = false;
                     document.getElementById('saveImgBtn').disabled = false; // 画像保存を有効化
-                    log(`「総合実力指標」の算出に成功しました！画像保存も可能です。`, "success");
+                    log(`「Total Rating」の算出に成功しました。画像保存も可能です。`, "success");
                 } else {
                     log("対象となる有効なスコアデータがありませんでした。");
                 }
@@ -388,6 +396,42 @@
                 console.error(err);
             });
         });
+
+// 【新設：X（Twitter）シェアロジック】
+        document.getElementById('shareXBtn').addEventListener('click', function() {
+            const target = document.getElementById('resultCaptureArea');
+            if (!target) return;
+
+            log("リザルトをキャプチャしてクリップボードにコピー中...");
+            
+            // 1. html2canvasでコンテナを画像（Blob）に変換
+            html2canvas(target, {
+                scale: 2, // 高画質
+                useCORS: true,
+                backgroundColor: "#ffffff"
+            }).then(canvas => {
+                canvas.toBlob(async (blob) => {
+                    try {
+                        // 2. 画像をクリップボードに書き込み
+                        await navigator.clipboard.write([
+                            new ClipboardItem({ "image/png": blob })
+                        ]);
+                        log("✓ 画像をクリップボードにコピーしました。(Xの投稿画面に貼り付けられます)", "success");
+                        
+                        // 3. Xの投稿ウィンドウを自動で開く（テキスト文面付き）
+                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\n`);
+                        const shareUrl = `https://x.com/intent/tweet?text=${shareText}`;
+                        
+                        window.open(shareUrl, '_blank');
+                    } catch (clipErr) {
+                        log("クリップボードへの画像コピーに失敗しました。ブラウザのアクセス許可を確認してください: " + clipErr.message, "error");
+                    }
+                }, 'image/png');
+            }).catch(err => {
+                log("画像生成中にエラーが発生しました: " + err.message, "error");
+            });
+        });
+
 
         // CSVダウンロード
         document.getElementById('downloadBtn').addEventListener('click', function() {
