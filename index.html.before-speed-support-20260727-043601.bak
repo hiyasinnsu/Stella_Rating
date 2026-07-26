@@ -14,10 +14,6 @@
         button { padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
         button:hover { background-color: #0056b3; }
         button:disabled { background-color: #ccc; cursor: not-allowed; }
-        .setting-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-        .setting-row label { font-weight: bold; }
-        .setting-row select { padding: 8px 12px; font-size: 16px; border: 1px solid #aaa; border-radius: 4px; background: white; }
-        .setting-note { margin: 5px 0 0; color: #666; font-size: 13px; }
         #downloadBtn { background-color: #28a745; }
         #downloadBtn:hover { background-color: #218838; }
         #saveImgBtn { background-color: #17a2b8; }
@@ -82,11 +78,6 @@
         <h3>スコアデータベース（.dbファイル）を選択</h3>
         <input type="file" id="dbFile" accept=".db">
         <div id="dbStatus"></div>
-        <div class="setting-row">
-            <label for="speedSelect">評価対象のプレイスピード</label>
-            <select id="speedSelect" aria-label="評価対象のプレイスピード"></select>
-        </div>
-        <p class="setting-note">S0は通常スコア、S-12～S+12はOpenLR2の速度別スコアを集計します。FREQとSPEEDは同じ速度データとして扱います。</p>
     </div>
 
     <p style="text-align: center;">
@@ -102,9 +93,7 @@
     <div id="resultCaptureArea" style="display:none;">
 
         <div class="rating-card" id="ratingCard">
-            <!-- Original: <div class="rating-title">Total Rating</div>
-                 Reason for change: Show which speed dataset produced the displayed Rating. -->
-            <div class="rating-title" id="ratingTitle">Total Rating (S0)</div>
+            <div class="rating-title">Total Rating</div>
             <div class="rating-value" id="ratingValue">0.00</div>
             <div class="rating-desc">※ 計算式: (1～10位の単曲レート×2 + 11〜30位の単曲レート) / 40</div>
         </div>
@@ -141,43 +130,7 @@
         let isJsonReady = false;
         let finalResultList = [];
         let currentTotalRating = "0.00"; 
-        let currentSpeedAmount = 0;
-        let currentSpeedLabel = "S0";
-        // Original: const allHeaders = ['順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
-        // Reason for change: Include the selected speed in exported CSV rows.
-        const allHeaders = ['速度', '順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
-
-        function formatSpeedLabel(speedAmount) {
-            if (speedAmount === 0) return "S0";
-            return `S${speedAmount > 0 ? "+" : ""}${speedAmount}`;
-        }
-
-        function initializeSpeedSelector() {
-            const speedSelect = document.getElementById('speedSelect');
-            for (let speedAmount = -12; speedAmount <= 12; speedAmount++) {
-                const option = document.createElement('option');
-                option.value = String(speedAmount);
-                option.textContent = formatSpeedLabel(speedAmount);
-                if (speedAmount === 0) option.selected = true;
-                speedSelect.appendChild(option);
-            }
-        }
-
-        function extractChartHashForSpeed(rawHash, speedAmount) {
-            const normalizedHash = String(rawHash || "").trim().toLowerCase();
-            const isChartHash = hash => /^[0-9a-f]{32}$/.test(hash);
-
-            if (speedAmount === 0) {
-                return isChartHash(normalizedHash) ? normalizedHash : null;
-            }
-
-            // OpenLR2 stores positive values without a plus sign: S+4 -> "_S4".
-            const suffix = `_s${speedAmount}`;
-            if (!normalizedHash.endsWith(suffix)) return null;
-
-            const chartHash = normalizedHash.slice(0, -suffix.length);
-            return isChartHash(chartHash) ? chartHash : null;
-        }
+        const allHeaders = ['順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
 
         // 【新設：0〜25の範囲でご指定のグラデーションカラーを計算する関数】
         function getRateColor(val) {
@@ -220,7 +173,6 @@
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
-            initializeSpeedSelector();
             try {
                 SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` });
                 log("システム: ライブラリの初期化完了。");
@@ -302,11 +254,7 @@
             if (!isJsonReady) { alert("難易度表JSONの読み込みが完了していません。"); return; }
             if (!dbInstance) { alert("先にDBファイルを選択してください。"); return; }
 
-            currentSpeedAmount = Number.parseInt(document.getElementById('speedSelect').value, 10);
-            currentSpeedLabel = formatSpeedLabel(currentSpeedAmount);
-            // Original: log("\n--- Total Ratingを算出します ---");
-            // Reason for change: Identify the selected speed dataset in the result log.
-            log(`\n--- ${currentSpeedLabel}のTotal Ratingを算出します ---`);
+            log("\n--- Total Ratingを算出します ---");
             document.getElementById('downloadBtn').disabled = true;
             document.getElementById('saveImgBtn').disabled = true;
             document.getElementById('shareXBtn').disabled = true; 
@@ -340,15 +288,9 @@
                 dbRows.forEach(row => {
                     const hIdx = dbHeaders.indexOf(hashCol);
                     const dbHash = row[hIdx] ? row[hIdx].toLowerCase() : '';
-                    const chartHash = extractChartHashForSpeed(dbHash, currentSpeedAmount);
 
-                    /* Original:
-                       if (jsonMetaMap[dbHash]) {
-                           const meta = jsonMetaMap[dbHash];
-                       Reason for change: Speed rows append "_S<amount>" to the chart MD5,
-                       so remove only the selected speed suffix before metadata lookup. */
-                    if (chartHash && jsonMetaMap[chartHash]) {
-                        const meta = jsonMetaMap[chartHash];
+                    if (jsonMetaMap[dbHash]) {
+                        const meta = jsonMetaMap[dbHash];
                         const cIdx = dbHeaders.indexOf('clear');
                         const clearValue = cIdx !== -1 ? row[cIdx] : 0;
 
@@ -390,7 +332,6 @@
                         let finalScoreValue = baseValue * scoreIndex;
 
                         finalResultList.push({
-                            '速度': currentSpeedLabel,
                             '順位': 0, 
                             '単曲レート': finalScoreValue,
                             'スコア倍率': scoreIndex,
@@ -408,9 +349,7 @@
                     }
                 });
 
-                // Original: log(`有効データ: クリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
-                // Reason for change: Make it explicit that results belong to one speed dataset.
-                log(`有効データ: ${currentSpeedLabel}でクリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
+                log(`有効データ: クリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
 
                 if (finalResultList.length > 0) {
                     finalResultList.sort((a, b) => b['単曲レート'] - a['単曲レート']);
@@ -430,7 +369,6 @@
                     
                     document.getElementById('resultCaptureArea').style.display = 'block';
                     document.getElementById('ratingCard').style.display = 'block';
-                    document.getElementById('ratingTitle').innerText = `Total Rating (${currentSpeedLabel})`;
                     document.getElementById('ratingValue').innerText = currentTotalRating;
                     document.getElementById('previewArea').style.display = 'block';
 
@@ -490,9 +428,7 @@
                 const imgData = canvas.toDataURL('image/png');
                 const link = document.createElement('a');
                 link.href = imgData;
-                // Original: link.download = `bms_result_rating_${new Date().toISOString().slice(0,10)}.png`;
-                // Reason for change: Prevent downloaded images for different speeds from being confused.
-                link.download = `bms_result_rating_${currentSpeedLabel}_${new Date().toISOString().slice(0,10)}.png`;
+                link.download = `bms_result_rating_${new Date().toISOString().slice(0,10)}.png`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -522,9 +458,7 @@
                         ]);
                         log("✓ 画像をクリップボードにコピーしました。(Xの投稿画面に Ctrl+V で貼り付けられます)", "success");
                         
-                        // Original: const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\nhttps://hiyasinnsu.github.io/Stella_Rating/`);
-                        // Reason for change: Include the selected speed in shared results.
-                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\n${currentSpeedLabel} Rating: ${currentTotalRating}\nhttps://hiyasinnsu.github.io/Stella_Rating/`);
+                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\nhttps://hiyasinnsu.github.io/Stella_Rating/`);
                         const shareUrl = `https://x.com/intent/tweet?text=${shareText}`;
                         
                         window.open(shareUrl, '_blank');
@@ -555,9 +489,7 @@
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
-            // Original: link.download = "bms_total_rating.csv";
-            // Reason for change: Prevent CSV files for different speeds from being confused.
-            link.download = `bms_total_rating_${currentSpeedLabel}.csv`;
+            link.download = "bms_total_rating.csv";
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
