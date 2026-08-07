@@ -1,0 +1,955 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Starlight・Satellite・Stellaを統合難易度1〜38として評価し、Score.dbの上位200譜面を表示します。">
+    <!-- Previous: dark #090c1b browser chrome. Reason: match the simplified white UI. -->
+    <meta name="theme-color" content="#ffffff">
+    <title>統合難易度レーティング | Stella Rating Hub</title>
+    <link rel="icon" href="SR_icon.png" type="image/png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #090c1b;
+            --panel: #12172c;
+            --panel-soft: #171d35;
+            --line: rgba(255, 255, 255, 0.12);
+            --text: #f5f7ff;
+            --muted: #aeb7d2;
+            --blue: #67d7ff;
+            --violet: #b99bff;
+            --pink: #ff9ed4;
+            --danger: #ff9eaa;
+            --success: #7be0b5;
+        }
+
+        * { box-sizing: border-box; }
+
+        html { min-width: 320px; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
+            line-height: 1.65;
+            background:
+                radial-gradient(circle at 8% 0%, rgba(53, 119, 255, 0.2), transparent 30rem),
+                radial-gradient(circle at 92% 10%, rgba(164, 89, 255, 0.18), transparent 32rem),
+                var(--bg);
+        }
+
+        a { color: inherit; }
+
+        .page {
+            width: min(1280px, 100%);
+            margin: 0 auto;
+            padding: 22px clamp(16px, 4vw, 42px) 64px;
+        }
+
+        nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.86rem;
+        }
+
+        nav a {
+            padding: 8px 12px;
+            color: #dbe4ff;
+            text-decoration: none;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        nav a:hover { background: rgba(255, 255, 255, 0.09); }
+        nav a:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+
+        header { padding: clamp(42px, 7vw, 82px) 0 36px; }
+
+        .eyebrow {
+            margin: 0 0 12px;
+            color: var(--violet);
+            font-size: 0.76rem;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+        }
+
+        h1 {
+            max-width: 850px;
+            margin: 0;
+            font-size: clamp(2.4rem, 7vw, 5rem);
+            line-height: 1.04;
+            letter-spacing: -0.05em;
+        }
+
+        h1 span {
+            color: transparent;
+            background: linear-gradient(100deg, var(--blue), var(--violet) 55%, var(--pink));
+            background-clip: text;
+            -webkit-background-clip: text;
+        }
+
+        .lead {
+            max-width: 760px;
+            margin: 20px 0 0;
+            color: var(--muted);
+            font-size: clamp(1rem, 2vw, 1.12rem);
+        }
+
+        .formula-grid {
+            display: grid;
+            margin: 0 0 24px;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .formula {
+            padding: 18px;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: rgba(18, 23, 44, 0.78);
+        }
+
+        .formula strong {
+            display: block;
+            margin-bottom: 7px;
+            color: #edf1ff;
+            font-size: 0.82rem;
+        }
+
+        .formula code {
+            color: #caeaff;
+            font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+            font-size: 0.82rem;
+            white-space: normal;
+        }
+
+        .panel {
+            padding: clamp(20px, 4vw, 30px);
+            border: 1px solid var(--line);
+            border-radius: 22px;
+            background: linear-gradient(145deg, rgba(25, 31, 58, 0.96), rgba(15, 19, 38, 0.96));
+            box-shadow: 0 22px 50px rgba(0, 0, 0, 0.24);
+        }
+
+        .panel h2 { margin: 0 0 8px; font-size: 1.25rem; }
+        .panel > p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+
+        .controls {
+            display: grid;
+            margin-top: 22px;
+            grid-template-columns: minmax(0, 1fr) 210px;
+            gap: 16px;
+        }
+
+        .field {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
+            gap: 7px;
+        }
+
+        .field label { font-size: 0.82rem; font-weight: 750; }
+
+        input[type="file"],
+        select {
+            width: 100%;
+            min-height: 46px;
+            padding: 9px 12px;
+            color: var(--text);
+            font: inherit;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            background: #0e1328;
+        }
+
+        input[type="file"]::file-selector-button {
+            margin-right: 12px;
+            padding: 7px 11px;
+            color: var(--text);
+            font-weight: 700;
+            border: 0;
+            border-radius: 7px;
+            background: rgba(103, 215, 255, 0.16);
+            cursor: pointer;
+        }
+
+        input:focus-visible,
+        select:focus-visible,
+        button:focus-visible {
+            outline: 3px solid var(--blue);
+            outline-offset: 3px;
+        }
+
+        .actions {
+            display: flex;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        button {
+            min-height: 44px;
+            padding: 10px 17px;
+            color: #09101a;
+            font: inherit;
+            font-weight: 800;
+            border: 0;
+            border-radius: 10px;
+            background: linear-gradient(100deg, var(--blue), #a9e8ff);
+            cursor: pointer;
+        }
+
+        button.secondary {
+            color: var(--text);
+            border: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        button:disabled { opacity: 0.42; cursor: not-allowed; }
+
+        #dbStatus {
+            min-height: 1.5em;
+            margin: 13px 0 0;
+            color: var(--muted);
+            font-size: 0.88rem;
+        }
+
+        #dbStatus.success { color: var(--success); }
+        #dbStatus.error { color: var(--danger); }
+
+        details {
+            margin-top: 18px;
+            color: var(--muted);
+            font-size: 0.84rem;
+        }
+
+        summary { cursor: pointer; }
+
+        #log {
+            max-height: 160px;
+            margin: 10px 0 0;
+            padding: 13px;
+            overflow: auto;
+            color: #c7d0e7;
+            font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+            font-size: 0.75rem;
+            border-radius: 10px;
+            background: #080b16;
+            white-space: pre-wrap;
+        }
+
+        #result { margin-top: 24px; }
+        #result[hidden] { display: none; }
+
+        .summary-card {
+            display: grid;
+            padding: clamp(22px, 4vw, 34px);
+            grid-template-columns: 1.3fr 1fr 1fr;
+            gap: 18px;
+            border: 1px solid rgba(185, 155, 255, 0.28);
+            border-radius: 22px;
+            background:
+                radial-gradient(circle at 85% 15%, rgba(185, 155, 255, 0.22), transparent 17rem),
+                linear-gradient(135deg, #182240, #201535);
+        }
+
+        .metric { align-self: end; }
+        .metric small { display: block; color: var(--muted); font-weight: 700; }
+
+        .metric strong {
+            display: block;
+            margin-top: 4px;
+            font-size: clamp(1.8rem, 5vw, 3.4rem);
+            line-height: 1.1;
+            letter-spacing: -0.04em;
+        }
+
+        .metric:not(:first-child) strong { font-size: clamp(1.5rem, 4vw, 2.6rem); }
+
+        .result-heading {
+            display: flex;
+            margin: 28px 0 12px;
+            align-items: end;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .result-heading h2 { margin: 0; font-size: clamp(1.25rem, 3vw, 1.7rem); }
+        #resultMeta { margin: 0; color: var(--muted); font-size: 0.82rem; }
+
+        .table-wrap {
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            background: #0e1224;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1180px;
+            border-collapse: collapse;
+            font-size: 0.79rem;
+        }
+
+        th,
+        td {
+            padding: 10px 11px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            white-space: nowrap;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            color: #cbd5ef;
+            font-size: 0.72rem;
+            letter-spacing: 0.03em;
+            background: #171c32;
+        }
+
+        tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.025); }
+        tbody tr.top-ten { background: rgba(185, 155, 255, 0.09); }
+        tbody tr:hover { background: rgba(103, 215, 255, 0.08); }
+
+        td.rank { width: 50px; color: var(--muted); text-align: center; font-weight: 800; }
+        td.rating { color: #bfefff; font-size: 0.88rem; font-weight: 850; }
+        td.rating.negative { color: var(--danger); }
+        td.title { min-width: 260px; white-space: normal; }
+        td.title small { display: block; color: var(--muted); }
+
+        .level {
+            display: inline-block;
+            min-width: 46px;
+            padding: 3px 7px;
+            text-align: center;
+            font-weight: 850;
+            border-radius: 7px;
+            background: rgba(185, 155, 255, 0.14);
+        }
+
+        .lamp-failed { color: var(--danger); }
+        .lamp-easy { color: #86d6a4; }
+        .lamp-normal { color: #ffe17d; }
+        .lamp-hard { color: #ff9797; }
+        .lamp-fullcombo { color: #8fc4ff; }
+
+        .empty {
+            padding: 28px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        @media (max-width: 760px) {
+            .formula-grid, .controls { grid-template-columns: 1fr; }
+            .summary-card { grid-template-columns: 1fr 1fr; }
+            .metric:first-child { grid-column: 1 / -1; }
+            .result-heading { align-items: flex-start; flex-direction: column; }
+        }
+
+        @media (max-width: 480px) {
+            nav { align-items: flex-start; flex-direction: column; }
+            .summary-card { grid-template-columns: 1fr; }
+            .metric:first-child { grid-column: auto; }
+            .actions button { width: 100%; }
+        }
+
+        /* Previous: dark theme, gradients, hero, formula cards, metric cards, and decorative effects.
+           Reason for change: Match the original Stella_Rating UI and keep only required controls and results. */
+        :root { color-scheme: light; }
+        body {
+            min-height: 0;
+            max-width: 1100px;
+            margin: 20px auto;
+            padding: 0 10px;
+            color: #333;
+            font-family: sans-serif;
+            line-height: 1.6;
+            background: #fff;
+        }
+        body::before { display: none; }
+        .page { width: auto; margin: 0; padding: 0; }
+        nav { display: block; margin-bottom: 15px; font-size: 14px; }
+        nav a { padding: 0; color: #007bff; border: 0; border-radius: 0; background: none; }
+        nav a:hover { background: none; text-decoration: underline; }
+        nav a:focus-visible { outline: 2px solid #333; outline-offset: 2px; }
+        header { padding: 0; }
+        h1 { max-width: none; margin: 0.67em 0; font-size: 2em; line-height: 1.2; letter-spacing: normal; }
+        .box, .panel {
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            background: #f9f9f9;
+            box-shadow: none;
+        }
+        .box:hover, .panel:hover { border-color: #888; }
+        .box h3 { margin-top: 0; }
+        .setting-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+        .setting-row label { font-weight: bold; }
+        input[type="file"], select {
+            width: auto;
+            min-height: 0;
+            padding: 8px 12px;
+            color: #333;
+            font-size: 16px;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            background: #fff;
+        }
+        input[type="file"] { max-width: 100%; padding: 4px; }
+        input[type="file"]::file-selector-button { margin-right: 8px; padding: 6px 10px; color: #333; border: 1px solid #aaa; border-radius: 3px; background: #fff; }
+        .actions { display: block; margin: 0; text-align: center; }
+        button {
+            min-height: 0;
+            padding: 10px 20px;
+            margin: 5px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: normal;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+        }
+        button:hover { background: #0056b3; }
+        button.secondary, #downloadBtn { color: #fff; border: 0; background: #28a745; }
+        button.secondary:hover, #downloadBtn:hover { background: #218838; }
+        button:disabled { background: #ccc; }
+        #dbStatus, .setting-note { margin: 5px 0 0; color: #666; font-size: 13px; }
+        details { margin: 12px 0; color: #333; font-size: 14px; }
+        #log { max-height: 160px; margin-top: 8px; padding: 15px; color: #fff; font-size: 13px; border-radius: 5px; background: #222; }
+        #result { margin-top: 20px; }
+        #result h3 { margin-bottom: 0; border-left: 4px solid #1f4068; padding-left: 8px; }
+        .table-wrap { overflow-x: auto; border: 0; border-radius: 0; background: #fff; }
+        table { width: 100%; min-width: 1050px; margin-top: 15px; font-size: 12px; border-collapse: collapse; background: #fff; }
+        th, td { padding: 6px 8px; text-align: left; white-space: nowrap; border: 1px solid #ddd; }
+        th { position: static; color: #333; font-size: 12px; letter-spacing: normal; background: #f2f2f2; }
+        tbody tr:nth-child(even), tbody tr:hover { background: transparent; }
+        tbody tr.top-ten { font-weight: bold; background: #fce5cd; }
+        td.rank { width: 40px; color: #666; text-align: center; }
+        td.rating { color: #0056b3; font-size: 12px; }
+        td.rating.negative { color: #dc3545; }
+        td.title { min-width: 220px; white-space: normal; }
+        td.title small { color: #666; }
+        .level { min-width: 0; padding: 0; color: #333; border-radius: 0; background: none; }
+        .lamp-failed { color: #666; }
+        .lamp-easy { color: #38761d; }
+        .lamp-normal { color: #e6b800; }
+        .lamp-hard { color: #cc0000; }
+        .lamp-fullcombo { color: #4488ff; }
+        @media (max-width: 480px) {
+            nav { display: block; }
+            .actions button { width: auto; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Previous decorative hero, formula cards, and summary cards were removed to match the original UI. -->
+    <nav aria-label="ページ移動">
+        <a href="index.html">ホーム</a> |
+        <a href="stella-rating.html">Stella_Rating</a>
+    </nav>
+
+    <h1>統合難易度レーティング</h1>
+
+    <details>
+        <summary>計算式</summary>
+        <p class="setting-note">
+            sr1～12 = 1～12 / sl0～12 = 13～25 / st0～12 = 26～38<br>
+            Acc = (PGREAT + GREAT×0.86 + GOOD×0.30) ÷ ノーツ数 × 100<br>
+            Diff = 統合難易度×24 + 76 / Rating = Diff×(Acc−80)÷20
+        </p>
+    </details>
+
+    <div class="box">
+        <h3>Score.dbを選択</h3>
+        <input type="file" id="dbFile" accept=".db" disabled>
+        <div class="setting-row">
+            <label for="speedSelect">プレイスピード</label>
+            <select id="speedSelect" aria-label="プレイスピード"></select>
+        </div>
+        <p id="dbStatus" role="status">準備中...</p>
+    </div>
+
+    <p class="actions">
+        <button type="button" id="runBtn" disabled>計算</button>
+        <button type="button" id="downloadBtn" class="secondary" disabled>CSVダウンロード</button>
+    </p>
+
+    <details>
+        <summary>処理ログ</summary>
+        <div id="log" role="log" aria-live="polite">初期化中...</div>
+    </details>
+
+    <section id="result" hidden aria-labelledby="resultTitle">
+        <h3 id="resultTitle">上位200譜面</h3>
+        <p id="resultMeta" class="setting-note"></p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">順位</th>
+                        <th scope="col">Rating</th>
+                        <th scope="col">Acc</th>
+                        <th scope="col">Diff</th>
+                        <th scope="col">統合</th>
+                        <th scope="col">表記</th>
+                        <th scope="col">曲名</th>
+                        <th scope="col">clear</th>
+                        <th scope="col">PGREAT</th>
+                        <th scope="col">GREAT</th>
+                        <th scope="col">GOOD</th>
+                        <th scope="col">BAD</th>
+                        <th scope="col">POOR</th>
+                        <th scope="col">ノーツ数</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        "use strict";
+
+        var SQL;
+        var dbInstance = null;
+        var chartMeta = new Map();
+        var jsonReady = false;
+        var visibleResults = [];
+        var currentSpeedAmount = 0;
+        var currentSpeedLabel = "S0";
+
+        var tableDefinitions = [
+            { file: "sr_score.json", type: "sr", label: "Starlight" },
+            { file: "sl_score.json", type: "sl", label: "Satellite" },
+            { file: "st_score.json", type: "st", label: "Stella" }
+        ];
+
+        function integratedDifficulty(type, rawLevel) {
+            /* Original: Removed every non-digit before parsing the level.
+               Reason for change: Reject malformed values such as "-1" and "1x" instead of silently treating them as valid. */
+            var levelMatch = String(rawLevel).trim().toLowerCase().match(new RegExp("^(?:" + type + ")?([0-9]+)$"));
+            var level = levelMatch ? Number.parseInt(levelMatch[1], 10) : NaN;
+            var minimum = type === "sr" ? 1 : 0;
+            var offset = type === "sr" ? 0 : type === "sl" ? 13 : type === "st" ? 26 : NaN;
+
+            if (!Number.isInteger(level) || level < minimum || level > 12 || !Number.isFinite(offset)) {
+                throw new Error("不正な難易度です: " + type + rawLevel);
+            }
+            return level + offset;
+        }
+
+        function calculateChartRating(type, rawLevel, perfect, great, good, totalNotes) {
+            var rawValues = [perfect, great, good, totalNotes];
+            if (rawValues.some(function (value) { return value === null || value === undefined || value === ""; })) {
+                return null;
+            }
+            var values = rawValues.map(Number);
+            if (!values.every(Number.isFinite) || values.some(function (value) { return value < 0; }) || values[3] <= 0) {
+                return null;
+            }
+
+            var unified = integratedDifficulty(type, rawLevel);
+            var accRatio = (values[0] + values[1] * 0.86 + values[2] * 0.30) / values[3];
+            var diff = unified * 24 + 76;
+            var rating = diff * (accRatio - 0.8) / 0.2;
+
+            if (!values.every(Number.isInteger) || values[0] + values[1] + values[2] > values[3] ||
+                !Number.isFinite(accRatio) || !Number.isFinite(rating)) {
+                return null;
+            }
+
+            return {
+                unified: unified,
+                accRatio: accRatio,
+                diff: diff,
+                rating: rating
+            };
+        }
+
+        function runSelfChecks() {
+            var at80 = calculateChartRating("sr", 1, 80, 0, 0, 100);
+            var at90 = calculateChartRating("sr", 1, 90, 0, 0, 100);
+            var at100 = calculateChartRating("sr", 1, 100, 0, 0, 100);
+            var checks = [
+                integratedDifficulty("sr", 1) === 1,
+                integratedDifficulty("sr", 12) === 12,
+                integratedDifficulty("sl", 0) === 13,
+                integratedDifficulty("sl", 12) === 25,
+                integratedDifficulty("st", 0) === 26,
+                integratedDifficulty("st", 12) === 38,
+                Math.abs(at80.rating) < 1e-9,
+                Math.abs(at90.rating - 50) < 1e-9,
+                Math.abs(at100.rating - 100) < 1e-9
+            ];
+            if (!checks.every(Boolean)) throw new Error("計算ロジックのセルフチェックに失敗しました。");
+        }
+
+        function formatSpeedLabel(speedAmount) {
+            if (speedAmount === 0) return "S0";
+            return "S" + (speedAmount > 0 ? "+" : "") + speedAmount;
+        }
+
+        function initializeSpeedSelector() {
+            var select = document.getElementById("speedSelect");
+            for (var amount = -12; amount <= 12; amount += 1) {
+                var option = document.createElement("option");
+                option.value = String(amount);
+                option.textContent = formatSpeedLabel(amount);
+                option.selected = amount === 0;
+                select.appendChild(option);
+            }
+        }
+
+        function extractChartHashForSpeed(rawHash, speedAmount) {
+            var normalized = String(rawHash || "").trim().toLowerCase();
+            var isChartHash = function (hash) { return /^[0-9a-f]{32}$/.test(hash); };
+
+            if (speedAmount === 0) return isChartHash(normalized) ? normalized : null;
+
+            var suffix = "_s" + speedAmount;
+            if (!normalized.endsWith(suffix)) return null;
+
+            var chartHash = normalized.slice(0, -suffix.length);
+            return isChartHash(chartHash) ? chartHash : null;
+        }
+
+        function log(message) {
+            var target = document.getElementById("log");
+            var timestamp = new Date().toLocaleTimeString("ja-JP", { hour12: false });
+            target.textContent += "\n[" + timestamp + "] " + message;
+            target.scrollTop = target.scrollHeight;
+        }
+
+        function setDbStatus(message, className) {
+            var status = document.getElementById("dbStatus");
+            status.textContent = message;
+            status.className = className || "";
+        }
+
+        async function loadTable(definition) {
+            var response = await fetch(definition.file);
+            if (!response.ok) throw new Error(definition.file + " の読み込みに失敗しました。");
+
+            var jsonData = await response.json();
+            var items = Array.isArray(jsonData) ? jsonData : [];
+            if (!Array.isArray(jsonData) && jsonData && typeof jsonData === "object") {
+                Object.keys(jsonData).forEach(function (key) {
+                    if (Array.isArray(jsonData[key])) items = items.concat(jsonData[key]);
+                });
+            }
+
+            var count = 0;
+            items.forEach(function (item) {
+                if (!item || !item.md5) return;
+                try {
+                    var unified = integratedDifficulty(definition.type, item.level);
+                    chartMeta.set(String(item.md5).toLowerCase(), {
+                        title: item.title || "Unknown",
+                        artist: item.artist || "",
+                        type: definition.type,
+                        level: String(item.level),
+                        tableLevel: definition.type + item.level,
+                        unified: unified
+                    });
+                    count += 1;
+                } catch (error) {
+                    log(error.message);
+                }
+            });
+            return { label: definition.label, count: count };
+        }
+
+        function getCellNumber(row, headers, column) {
+            var index = headers.indexOf(column);
+            if (index < 0 || row[index] === null || row[index] === "") return null;
+            var value = Number(row[index]);
+            return Number.isFinite(value) ? value : null;
+        }
+
+        function clearInfo(value) {
+            if (value === null || value === undefined || value === "") {
+                return { text: "-", className: "" };
+            }
+            var clearValue = Number(value);
+            var map = {
+                1: { text: "FAILED", className: "lamp-failed" },
+                2: { text: "EASY", className: "lamp-easy" },
+                3: { text: "NORMAL", className: "lamp-normal" },
+                4: { text: "HARD", className: "lamp-hard" },
+                5: { text: "FULLCOMBO", className: "lamp-fullcombo" }
+            };
+            return map[clearValue] || { text: Number.isFinite(clearValue) ? String(clearValue) : "-", className: "" };
+        }
+
+        function addCell(row, value, className) {
+            var cell = document.createElement("td");
+            cell.textContent = value;
+            if (className) cell.className = className;
+            row.appendChild(cell);
+            return cell;
+        }
+
+        function renderResults(allResults, skippedInvalid) {
+            allResults.sort(function (a, b) {
+                return b.rating - a.rating ||
+                    b.accRatio - a.accRatio ||
+                    b.unified - a.unified ||
+                    a.title.localeCompare(b.title, "ja") ||
+                    a.hash.localeCompare(b.hash);
+            });
+
+            visibleResults = allResults.slice(0, 200);
+            visibleResults.forEach(function (item, index) { item.rank = index + 1; });
+
+            var body = document.getElementById("resultBody");
+            body.textContent = "";
+
+            visibleResults.forEach(function (item, index) {
+                var row = document.createElement("tr");
+                if (index < 10) row.className = "top-ten";
+
+                addCell(row, item.rank, "rank");
+                addCell(row, item.rating.toFixed(2), "rating" + (item.rating < 0 ? " negative" : ""));
+                addCell(row, (item.accRatio * 100).toFixed(2) + "%");
+                addCell(row, item.diff);
+                addCell(row, item.unified);
+
+                var levelCell = document.createElement("td");
+                var level = document.createElement("span");
+                level.className = "level";
+                level.textContent = item.tableLevel;
+                levelCell.appendChild(level);
+                row.appendChild(levelCell);
+
+                var titleCell = addCell(row, item.title, "title");
+                if (item.artist) {
+                    var artist = document.createElement("small");
+                    artist.textContent = item.artist;
+                    titleCell.appendChild(artist);
+                }
+
+                addCell(row, item.clear.text, item.clear.className);
+                addCell(row, item.perfect);
+                addCell(row, item.great);
+                addCell(row, item.good);
+                addCell(row, item.bad === null ? "-" : item.bad);
+                addCell(row, item.poor === null ? "-" : item.poor);
+                addCell(row, item.totalNotes);
+                body.appendChild(row);
+            });
+
+            /* Original: Updated three decorative summary metrics and a verbose result sentence.
+               Reason for change: The table already shows the result; keep only speed and row count. */
+            // document.getElementById("bestRating").textContent = visibleResults.length ? visibleResults[0].rating.toFixed(2) : "—";
+            // document.getElementById("shownCount").textContent = String(visibleResults.length);
+            // document.getElementById("matchedCount").textContent = String(allResults.length);
+            document.getElementById("resultMeta").textContent = currentSpeedLabel + " / " + visibleResults.length + "件";
+            document.getElementById("result").hidden = false;
+            document.getElementById("downloadBtn").disabled = visibleResults.length === 0;
+        }
+
+        function calculateResults() {
+            if (!jsonReady || !dbInstance) return;
+
+            currentSpeedAmount = Number.parseInt(document.getElementById("speedSelect").value, 10);
+            currentSpeedLabel = formatSpeedLabel(currentSpeedAmount);
+            visibleResults = [];
+            document.getElementById("downloadBtn").disabled = true;
+            document.getElementById("result").hidden = true;
+            log(currentSpeedLabel + " の統合難易度レーティングを計算します。");
+
+            try {
+                var columnsResult = dbInstance.exec("PRAGMA table_info(score);");
+                if (!columnsResult.length) throw new Error("scoreテーブルが見つかりません。");
+
+                var dbColumns = columnsResult[0].values.map(function (row) { return row[1]; });
+                var hashColumn = dbColumns.includes("hash") ? "hash" : dbColumns.includes("md5") ? "md5" : null;
+                if (!hashColumn) throw new Error("hashまたはmd5カラムが見つかりません。");
+
+                /* Original: clear was optional and only the judgment columns were required.
+                   Reason for change: Rate only explicit LR2 play states 1-5 and reject missing or malformed play state data. */
+                var required = ["clear", "perfect", "great", "good", "totalnotes"];
+                var missing = required.filter(function (column) { return !dbColumns.includes(column); });
+                if (missing.length) throw new Error("必要なカラムがありません: " + missing.join(", "));
+
+                var optional = ["bad", "poor"].filter(function (column) { return dbColumns.includes(column); });
+                var selected = [hashColumn].concat(required, optional);
+                var dbResult = dbInstance.exec("SELECT " + selected.join(", ") + " FROM score");
+                if (!dbResult.length || !dbResult[0].values) throw new Error("scoreテーブルにデータがありません。");
+
+                var headers = dbResult[0].columns;
+                var hashIndex = headers.indexOf(hashColumn);
+                var clearIndex = headers.indexOf("clear");
+                var results = [];
+                var skippedInvalid = 0;
+
+                dbResult[0].values.forEach(function (row) {
+                    var chartHash = extractChartHashForSpeed(row[hashIndex], currentSpeedAmount);
+                    if (!chartHash || !chartMeta.has(chartHash)) return;
+
+                    var clearValue = clearIndex >= 0 ? getCellNumber(row, headers, "clear") : null;
+                    if (clearValue === 0) return;
+                    if (!Number.isInteger(clearValue) || clearValue < 1 || clearValue > 5) {
+                        skippedInvalid += 1;
+                        return;
+                    }
+
+                    var meta = chartMeta.get(chartHash);
+                    var perfect = getCellNumber(row, headers, "perfect");
+                    var great = getCellNumber(row, headers, "great");
+                    var good = getCellNumber(row, headers, "good");
+                    var totalNotes = getCellNumber(row, headers, "totalnotes");
+                    var calculated = calculateChartRating(meta.type, meta.level, perfect, great, good, totalNotes);
+
+                    if (!calculated) {
+                        skippedInvalid += 1;
+                        return;
+                    }
+
+                    results.push({
+                        hash: chartHash,
+                        rating: calculated.rating,
+                        accRatio: calculated.accRatio,
+                        diff: calculated.diff,
+                        unified: calculated.unified,
+                        tableLevel: meta.tableLevel,
+                        title: meta.title,
+                        artist: meta.artist,
+                        clear: clearInfo(clearValue),
+                        perfect: perfect,
+                        great: great,
+                        good: good,
+                        bad: getCellNumber(row, headers, "bad"),
+                        poor: getCellNumber(row, headers, "poor"),
+                        totalNotes: totalNotes
+                    });
+                });
+
+                renderResults(results, skippedInvalid);
+                if (results.length) {
+                    log("有効スコア " + results.length + "件から上位" + visibleResults.length + "件を表示しました。");
+                } else {
+                    log("対象となる有効なスコアがありませんでした。");
+                }
+            } catch (error) {
+                setDbStatus("計算できませんでした: " + error.message, "error");
+                log("エラー: " + error.message);
+            }
+        }
+
+        function csvValue(value) {
+            var text = String(value === null || value === undefined ? "" : value);
+            return '"' + text.replace(/"/g, '""') + '"';
+        }
+
+        function csvText(value) {
+            var text = String(value === null || value === undefined ? "" : value);
+            if (/^[=+\-@]/.test(text)) text = "'" + text;
+            return csvValue(text);
+        }
+
+        function downloadCsv() {
+            if (!visibleResults.length) return;
+
+            var headers = ["速度", "順位", "曲別レーティング", "Acc", "Diff", "統合難易度", "表記", "title", "artist", "clear", "PGREAT", "GREAT", "GOOD", "BAD", "POOR", "totalnotes"];
+            var rows = visibleResults.map(function (item) {
+                /* Original: Encoded the mixed text/number row with one .map(csvValue) call.
+                   Reason for change: Neutralize formula-leading metadata while keeping negative numeric ratings numeric. */
+                return [
+                    csvValue(currentSpeedLabel),
+                    csvValue(item.rank),
+                    csvValue(item.rating.toFixed(2)),
+                    csvValue((item.accRatio * 100).toFixed(4)),
+                    csvValue(item.diff),
+                    csvValue(item.unified),
+                    csvValue(item.tableLevel),
+                    csvText(item.title),
+                    csvText(item.artist),
+                    csvValue(item.clear.text),
+                    csvValue(item.perfect),
+                    csvValue(item.great),
+                    csvValue(item.good),
+                    csvValue(item.bad === null ? "" : item.bad),
+                    csvValue(item.poor === null ? "" : item.poor),
+                    csvValue(item.totalNotes)
+                ].join(",");
+            });
+            var csv = "\uFEFF" + headers.map(csvValue).join(",") + "\r\n" + rows.join("\r\n");
+            var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement("a");
+            link.href = url;
+            link.download = "unified_rating_" + currentSpeedLabel.replace("+", "plus") + ".csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById("dbFile").addEventListener("change", async function (event) {
+            var file = event.target.files[0];
+            if (!file || !SQL) return;
+
+            visibleResults = [];
+            document.getElementById("result").hidden = true;
+            document.getElementById("downloadBtn").disabled = true;
+            document.getElementById("runBtn").disabled = true;
+            setDbStatus("Score.dbを読み込んでいます…", "");
+
+            try {
+                if (dbInstance) dbInstance.close();
+                dbInstance = null;
+                dbInstance = new SQL.Database(new Uint8Array(await file.arrayBuffer()));
+                setDbStatus("✓ " + file.name + " を読み込みました。", "success");
+                document.getElementById("runBtn").disabled = false;
+                log("Score.dbの読み込みが完了しました。");
+            } catch (error) {
+                dbInstance = null;
+                document.getElementById("runBtn").disabled = true;
+                setDbStatus("Score.dbを読み込めませんでした。", "error");
+                log("エラー: " + error.message);
+            }
+        });
+
+        document.getElementById("runBtn").addEventListener("click", calculateResults);
+        document.getElementById("downloadBtn").addEventListener("click", downloadCsv);
+
+        window.addEventListener("DOMContentLoaded", async function () {
+            initializeSpeedSelector();
+            try {
+                runSelfChecks();
+                if (window.location.protocol === "file:") {
+                    log("file://では難易度表JSONを読み込めません。GitHub Pages上で開いてください。");
+                }
+
+                var loaded = await Promise.all([
+                    initSqlJs({
+                        locateFile: function (file) {
+                            return "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/" + file;
+                        }
+                    }),
+                    Promise.all(tableDefinitions.map(loadTable))
+                ]);
+
+                SQL = loaded[0];
+                loaded[1].forEach(function (item) { log(item.label + ": " + item.count + "譜面"); });
+                jsonReady = true;
+                document.getElementById("dbFile").disabled = false;
+                setDbStatus("準備完了。Score.dbを選択してください。", "");
+                log("全" + chartMeta.size + "譜面の難易度表データを読み込みました。");
+            } catch (error) {
+                setDbStatus("システムを初期化できませんでした。", "error");
+                log("初期化エラー: " + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
