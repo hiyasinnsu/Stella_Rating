@@ -1,567 +1,322 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stella_Rating</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="BMSのScore.dbからStella_Ratingと統合レーティングを確認できるブラウザツールです。">
+    <meta name="theme-color" content="#070b18">
+    <title>Stella Rating Hub</title>
     <link rel="icon" href="SR_icon.png" type="image/png">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
-        body { font-family: sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 10px; line-height: 1.6; color: #333; }
-        .box { border: 2px dashed #ccc; padding: 20px; margin-bottom: 15px; background: #f9f9f9; border-radius: 5px; }
-        .box:hover { border-color: #888; }
-        button { padding: 10px 20px; font-size: 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        .setting-row { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-        .setting-row label { font-weight: bold; }
-        .setting-row select { padding: 8px 12px; font-size: 16px; border: 1px solid #aaa; border-radius: 4px; background: white; }
-        .setting-note { margin: 5px 0 0; color: #666; font-size: 13px; }
-        #downloadBtn { background-color: #28a745; }
-        #downloadBtn:hover { background-color: #218838; }
-        #saveImgBtn { background-color: #17a2b8; }
-        #saveImgBtn:hover { background-color: #138496; }
-        
-        /* X（Twitter）ボタンのブランドカラー */
-        #shareXBtn { background-color: #14171A; }
-        #shareXBtn:hover { background-color: #272c30; }
-        
-        #output { white-space: pre-wrap; background: #222; color: #fff; padding: 15px; border-radius: 5px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 13px; }
-        .success { color: #28a745; font-weight: bold; }
-        .error { color: #dc3545; font-weight: bold; }
-        .info { color: #17a2b8; }
-        
-        /* 画像化するターゲットエリア全体のスタイル */
-        #resultCaptureArea {
-            background-color: #ffffff;
-            padding: 15px;
-            border-radius: 8px;
+        :root {
+            color-scheme: dark;
+            --bg: #070b18;
+            --panel: rgba(17, 24, 48, 0.78);
+            --line: rgba(255, 255, 255, 0.12);
+            --text: #f6f7ff;
+            --muted: #aeb8d4;
+            --blue: #6cd8ff;
+            --violet: #b99cff;
         }
 
-        /* 総合実力指標のダッシュボード表示 */
-        .rating-card {
-            background: linear-gradient(135deg, #1f4068, #162447);
-            color: white;
-            padding: 25px;
+        * { box-sizing: border-box; }
+
+        html { min-width: 320px; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            color: var(--text);
+            font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
+            background:
+                radial-gradient(circle at 12% 8%, rgba(63, 124, 255, 0.2), transparent 30rem),
+                radial-gradient(circle at 88% 22%, rgba(145, 77, 255, 0.18), transparent 28rem),
+                linear-gradient(145deg, #050713 0%, var(--bg) 52%, #0c1022 100%);
+        }
+
+        body::before {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            content: "";
+            opacity: 0.42;
+            background-image:
+                radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 1px, transparent 1.5px),
+                radial-gradient(circle, rgba(149, 203, 255, 0.55) 0 1px, transparent 1.5px);
+            background-position: 0 0, 37px 51px;
+            background-size: 92px 92px, 137px 137px;
+            mask-image: linear-gradient(to bottom, black, transparent 76%);
+        }
+
+        .page {
+            width: min(1100px, 100%);
+            margin: 0 auto;
+            padding: clamp(28px, 6vw, 72px) clamp(18px, 4vw, 44px) 32px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            color: #dce5ff;
+            font-size: 0.82rem;
+            font-weight: 750;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+
+        .brand img {
+            width: 42px;
+            height: 42px;
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+        }
+
+        .hero { padding: clamp(42px, 8vw, 86px) 0 clamp(36px, 6vw, 64px); }
+
+        .eyebrow {
+            margin: 0 0 14px;
+            color: var(--blue);
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+        }
+
+        h1 {
+            max-width: 850px;
+            margin: 0;
+            font-size: clamp(2.5rem, 8vw, 5.5rem);
+            line-height: 1.03;
+            letter-spacing: -0.055em;
+        }
+
+        h1 span {
+            color: transparent;
+            background: linear-gradient(100deg, var(--blue), #d8c7ff 58%, #ffb4db);
+            background-clip: text;
+            -webkit-background-clip: text;
+        }
+
+        .lead {
+            max-width: 690px;
+            margin: 24px 0 0;
+            color: var(--muted);
+            font-size: clamp(1rem, 2vw, 1.15rem);
+            line-height: 1.9;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            position: relative;
+            isolation: isolate;
+            display: flex;
+            min-height: 330px;
+            padding: clamp(24px, 4vw, 34px);
+            overflow: hidden;
+            flex-direction: column;
+            color: var(--text);
+            text-decoration: none;
+            border: 1px solid var(--line);
+            border-radius: 26px;
+            background: linear-gradient(145deg, rgba(29, 42, 78, 0.88), var(--panel));
+            box-shadow: 0 22px 55px rgba(0, 0, 0, 0.24);
+            transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .card::after {
+            position: absolute;
+            z-index: -1;
+            top: -95px;
+            right: -75px;
+            width: 250px;
+            height: 250px;
+            content: "";
+            border-radius: 50%;
+            background: rgba(63, 184, 255, 0.24);
+            filter: blur(3px);
+        }
+
+        .card--unified {
+            background: linear-gradient(145deg, rgba(54, 34, 91, 0.9), var(--panel));
+        }
+
+        .card--unified::after { background: rgba(186, 105, 255, 0.3); }
+
+        .card:focus-visible {
+            outline: 3px solid #fff;
+            outline-offset: 4px;
+        }
+
+        .tag {
+            align-self: flex-start;
+            padding: 6px 10px;
+            color: #d8f5ff;
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            border: 1px solid rgba(108, 216, 255, 0.36);
+            border-radius: 999px;
+            background: rgba(108, 216, 255, 0.08);
+        }
+
+        .card--unified .tag {
+            color: #eadfff;
+            border-color: rgba(185, 156, 255, 0.42);
+            background: rgba(185, 156, 255, 0.1);
+        }
+
+        .card h2 {
+            margin: 24px 0 10px;
+            font-size: clamp(1.65rem, 4vw, 2.25rem);
+            letter-spacing: -0.025em;
+        }
+
+        .card p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.75;
+        }
+
+        .facts {
+            display: flex;
+            margin: 22px 0 28px;
+            padding: 0;
+            flex-wrap: wrap;
+            gap: 8px;
+            list-style: none;
+        }
+
+        .facts li {
+            padding: 6px 9px;
+            color: #dce5ff;
+            font-size: 0.78rem;
             border-radius: 8px;
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .action {
+            display: flex;
+            margin-top: auto;
+            align-items: center;
+            justify-content: space-between;
+            color: #fff;
+            font-weight: 750;
+        }
+
+        .arrow {
+            display: grid;
+            width: 38px;
+            height: 38px;
+            place-items: center;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.11);
+            transition: transform 180ms ease, background 180ms ease;
+        }
+
+        .notes {
+            display: grid;
+            margin-top: 24px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .note {
+            padding: 17px 19px;
+            color: var(--muted);
+            font-size: 0.88rem;
+            line-height: 1.65;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            background: rgba(9, 14, 31, 0.6);
+        }
+
+        .note strong { color: #edf1ff; }
+
+        footer {
+            padding-top: 46px;
+            color: #7f8aa8;
+            font-size: 0.76rem;
             text-align: center;
-            margin: 10px 0 20px 0;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            display: none;
         }
-        .rating-title { font-size: 18px; letter-spacing: 1px; opacity: 0.9; }
-        .rating-value { font-size: 48px; font-weight: bold; margin: 5px 0; color: #e4e4e4; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-        .rating-desc { font-size: 12px; opacity: 0.7; }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; background-color: #ffffff; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        
-        /* 順位列のデザイン */
-        .rank-col { font-weight: bold; text-align: center; color: #666; width: 40px; }
-        
-        /* 上位10件専用のプレミアムハイライト */
-        .top10 { background-color: #fce5cd !important; font-weight: bold; }
-        .top10 .rank-col { color: #b45f06; }
-        .score-idx { color: #0056b3; }
-        
-        /* ランプごとの指定文字色 */
-        .lamp-FC { color: #4488ff; font-weight: bold; }     /* 水色 */
-        .lamp-HARD { color: #cc0000; font-weight: bold; }   /* 赤色 */
-        .lamp-NORMAL { color: #e6b800; font-weight: bold; } /* 黄色 */
-        .lamp-EASY { color: #38761d; font-weight: bold; }   /* 緑色 */
+        @media (hover: hover) {
+            .card:hover {
+                transform: translateY(-5px);
+                border-color: rgba(255, 255, 255, 0.25);
+                box-shadow: 0 28px 64px rgba(0, 0, 0, 0.34);
+            }
+
+            .card:hover .arrow {
+                transform: translateX(3px);
+                background: rgba(255, 255, 255, 0.2);
+            }
+        }
+
+        @media (max-width: 720px) {
+            .cards, .notes { grid-template-columns: 1fr; }
+            .card { min-height: 300px; }
+            .hero { padding-top: 48px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .card, .arrow { transition: none; }
+        }
     </style>
 </head>
 <body>
+    <div class="page">
+        <header>
+            <div class="brand">
+                <img src="SR_icon.png" alt="" width="42" height="42">
+                <span>Stella Rating Hub</span>
+            </div>
+            <div class="hero">
+                <p class="eyebrow">BMS SCORE ANALYZER</p>
+                <h1>あなたのスコアを、<br><span>二つの視点で。</span></h1>
+                <p class="lead">Score.dbを読み込み、従来のStella_Ratingと、3つの難易度表をつないだ統合レーティングを確認できます。</p>
+            </div>
+        </header>
 
-    <h1>Stella/Satellite難易度表実力評価ツール Stella_Rating</h1>
-    <p>Score.dbを選択し、実行ボタンを押してください。</p>
+        <main>
+            <section class="cards" aria-label="評価ツールを選ぶ">
+                <a class="card" href="stella-rating.html">
+                    <span class="tag">ORIGINAL</span>
+                    <h2>Stella_Rating</h2>
+                    <p>Satellite・Stella難易度表を使い、クリアランプと判定から従来式のTotal Ratingを算出します。</p>
+                    <ul class="facts" aria-label="主な機能">
+                        <li>SL0〜SL12</li>
+                        <li>ST0〜ST12</li>
+                        <li>上位30譜面</li>
+                    </ul>
+                    <span class="action">従来の評価を開く <span class="arrow" aria-hidden="true">→</span></span>
+                </a>
 
-    <div class="box">
-        <h3>スコアデータベース（.dbファイル）を選択</h3>
-        <input type="file" id="dbFile" accept=".db">
-        <div id="dbStatus"></div>
-        <div class="setting-row">
-            <label for="speedSelect">評価対象のプレイスピード</label>
-            <select id="speedSelect" aria-label="評価対象のプレイスピード"></select>
-        </div>
-        <p class="setting-note">S0は通常スコア、S-12～S+12はOpenLR2の速度別スコアを集計します。FREQとSPEEDは同じ速度データとして扱います。</p>
+                <a class="card card--unified" href="unified-rating.html">
+                    <span class="tag">NEW</span>
+                    <h2>統合レーティング</h2>
+                    <p>Starlight・Satellite・Stellaを統合難易度1〜38として扱い、精度ベースの単曲レーティングを算出します。</p>
+                    <ul class="facts" aria-label="主な機能">
+                        <li>SR・SL・ST</li>
+                        <li>統合難易度 1〜38</li>
+                        <li>上位200譜面</li>
+                    </ul>
+                    <span class="action">統合評価を開く <span class="arrow" aria-hidden="true">→</span></span>
+                </a>
+            </section>
+
+            <aside class="notes" aria-label="利用時の注意">
+                <div class="note"><strong>スコアは外部送信されません。</strong><br>選択したScore.dbは、お使いのブラウザ内だけで読み込み・計算します。</div>
+                <div class="note"><strong>GitHub Pagesからご利用ください。</strong><br>HTMLをPC上で直接開くと、ブラウザの制限により難易度表データを読み込めません。</div>
+            </aside>
+        </main>
+
+        <footer>Stella Rating Hub — BMS scores, calculated locally.</footer>
     </div>
-
-    <p style="text-align: center;">
-        <button id="runBtn">処理を実行</button>
-        <button id="downloadBtn" disabled>CSV形式でダウンロード</button>
-        <button id="saveImgBtn" disabled>PNG形式でダウンロード</button>
-        <button id="shareXBtn" disabled>クリップボードに保存してXでシェア</button>
-    </p>
-
-    <h3>処理結果ログ</h3>
-    <div id="output">システムロード中...</div>
-
-    <div id="resultCaptureArea" style="display:none;">
-
-        <div class="rating-card" id="ratingCard">
-            <!-- Original: <div class="rating-title">Total Rating</div>
-                 Reason for change: Show which speed dataset produced the displayed Rating. -->
-            <div class="rating-title" id="ratingTitle">Total Rating (S0)</div>
-            <div class="rating-value" id="ratingValue">0.00</div>
-            <div class="rating-desc">※ 計算式: (1～10位の単曲レート×2 + 11〜30位の単曲レート) / 40</div>
-        </div>
-
-        <div id="previewArea" style="display:none;">
-            <h3 style="margin-top: 20px; border-left: 4px solid #1f4068; padding-left: 8px;">単曲レート 上位30曲</h3>
-            <table id="previewTable">
-                <thead>
-                    <tr>
-                        <th>順位</th>
-                        <th>単曲レート</th>
-                        <th>スコア倍率</th>
-                        <th>level</th>
-                        <th>title</th>
-                        <th>clear</th>
-                        <th>perfect</th>
-                        <th>great</th>
-                        <th>good</th>
-                        <th>bad</th>
-                        <th>poor</th>
-                        <th>totalnotes</th>
-                    </tr>
-                </thead>
-                <tbody id="previewBody"></tbody>
-            </table>
-        </div>
-
-    </div>
-
-    <script>
-        let SQL;
-        let dbInstance = null;
-        let jsonMetaMap = {}; 
-        let isJsonReady = false;
-        let finalResultList = [];
-        let currentTotalRating = "0.00"; 
-        let currentSpeedAmount = 0;
-        let currentSpeedLabel = "S0";
-        // Original: const allHeaders = ['順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
-        // Reason for change: Include the selected speed in exported CSV rows.
-        const allHeaders = ['速度', '順位', '単曲レート', 'スコア倍率', 'level', 'title', 'clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
-
-        function formatSpeedLabel(speedAmount) {
-            if (speedAmount === 0) return "S0";
-            return `S${speedAmount > 0 ? "+" : ""}${speedAmount}`;
-        }
-
-        function initializeSpeedSelector() {
-            const speedSelect = document.getElementById('speedSelect');
-            for (let speedAmount = -12; speedAmount <= 12; speedAmount++) {
-                const option = document.createElement('option');
-                option.value = String(speedAmount);
-                option.textContent = formatSpeedLabel(speedAmount);
-                if (speedAmount === 0) option.selected = true;
-                speedSelect.appendChild(option);
-            }
-        }
-
-        function extractChartHashForSpeed(rawHash, speedAmount) {
-            const normalizedHash = String(rawHash || "").trim().toLowerCase();
-            const isChartHash = hash => /^[0-9a-f]{32}$/.test(hash);
-
-            if (speedAmount === 0) {
-                return isChartHash(normalizedHash) ? normalizedHash : null;
-            }
-
-            // OpenLR2 stores positive values without a plus sign: S+4 -> "_S4".
-            const suffix = `_s${speedAmount}`;
-            if (!normalizedHash.endsWith(suffix)) return null;
-
-            const chartHash = normalizedHash.slice(0, -suffix.length);
-            return isChartHash(chartHash) ? chartHash : null;
-        }
-
-        // 【新設：0〜25の範囲でご指定のグラデーションカラーを計算する関数】
-        function getRateColor(val) {
-            // 範囲を0〜25に制限
-            let v = Math.max(0, Math.min(25, val));
-            
-            // ご指定のグラデーションの10色のRGB基準値
-            const colors = [
-                { r:  0, g: 191, b: 255 }, // 0: 水色 (DeepSkyBlue)
-                { r:  34, g: 139, b:  34 }, // 1: 緑 (ForestGreen)
-                { r: 154, g: 205, b:  50 }, // 2: 黄緑 (YellowGreen)
-                { r: 255, g: 215, b:   0 }, // 3: 黄色 (Gold)
-                { r: 255, g: 140, b:   0 }, // 4: オレンジ (DarkOrange)
-                { r: 220, g:  20, b:  60 }, // 5: 赤 (Crimson)
-                { r: 255, g:  20, b: 147 }, // 6: ピンク (DeepPink)
-                { r: 148, g:   0, b: 211 }, // 7: 紫 (DarkViolet)
-                { r: 106, g:  90, b: 205 }, // 8: 青紫 (SlateBlue)
-                { r:   0, g:   0, b: 128 }  // 9: 紺色 (Navy)
-            ];
-
-            // 0〜25の数値を、9つの区間にマッピングする
-            let position = (v / 25) * (colors.length - 1);
-            let index = Math.floor(position);
-            let fraction = position - index;
-
-            if (index >= colors.length - 1) {
-                let c = colors[colors.length - 1];
-                return `rgb(${c.r}, ${c.g}, ${c.b})`;
-            }
-
-            // 現在の区間の2色間で線形補間（スムーズに色が繋がるようにブレンド）
-            let c1 = colors[index];
-            let c2 = colors[index + 1];
-
-            let r = Math.round(c1.r + (c2.r - c1.r) * fraction);
-            let g = Math.round(c1.g + (c2.g - c1.g) * fraction);
-            let b = Math.round(c1.b + (c2.b - c1.b) * fraction);
-
-            return `rgb(${r}, ${g}, ${b})`;
-        }
-
-        window.addEventListener('DOMContentLoaded', async () => {
-            initializeSpeedSelector();
-            try {
-                SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` });
-                log("システム: ライブラリの初期化完了。");
-
-                log("難易度表データを自動読込中...");
-                let slCount = await loadJsonFile('sl_score.json', 'sl');
-                log(`Satellite (sl_score.json) から ${slCount} 曲登録しました。`);
-                
-                let stCount = await loadJsonFile('st_score.json', 'st');
-                log(`Stella (st_score.json) から ${stCount} 曲登録しました。`);
-                
-                isJsonReady = true;
-                log("システム準備完了。.dbファイルを選択して実行してください。", "success");
-            } catch (err) {
-                log("初期化エラー: " + err.message, "error");
-                log("※ローカルで直接HTMLを開いている場合はCORSエラーになります。GitHub Pagesにアップロードすると解消されます。", "info");
-            }
-        });
-
-        function log(message, className = "") {
-            const output = document.getElementById('output');
-            if (output.innerHTML === "システムロード中...") output.innerHTML = "";
-            const div = document.createElement('div');
-            div.className = className;
-            div.innerText = message;
-            output.appendChild(div);
-            output.scrollTop = output.scrollHeight;
-        }
-
-        async function loadJsonFile(url, type) {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`${url} の読み込みに失敗しました。`);
-            const jsonData = await response.json();
-            
-            let items = Array.isArray(jsonData) ? jsonData : [];
-            if (!Array.isArray(jsonData) && typeof jsonData === 'object') {
-                for (let k in jsonData) { if (Array.isArray(jsonData[k])) items = items.concat(jsonData[k]); }
-            }
-            
-            let count = 0;
-            items.forEach(item => {
-                if (item && item.md5) {
-                    let rawLevel = item.level !== undefined ? String(item.level) : "-";
-                    let formattedLevel = rawLevel;
-                    if (!rawLevel.toLowerCase().startsWith('sl') && !rawLevel.toLowerCase().startsWith('st')) {
-                        formattedLevel = type + rawLevel; 
-                    }
-
-                    jsonMetaMap[item.md5.toLowerCase()] = {
-                        title: item.title || "Unknown",
-                        level: formattedLevel, 
-                        type: type
-                    };
-                    count++;
-                }
-            });
-            return count;
-        }
-
-        document.getElementById('dbFile').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    dbInstance = new SQL.Database(new Uint8Array(e.target.result));
-                    document.getElementById('dbStatus').innerHTML = `<span class="success">✓ ${file.name} を読み込みました。</span>`;
-                    log(`ファイル読み込み完了: ${file.name}`);
-                } catch (err) {
-                    document.getElementById('dbStatus').innerHTML = `<span class="error">✕ 読み込み失敗</span>`;
-                    log("エラー: 有効なデータベースファイルではありません: " + err.message, "error");
-                    dbInstance = null;
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        });
-
-        document.getElementById('runBtn').addEventListener('click', function() {
-            if (!isJsonReady) { alert("難易度表JSONの読み込みが完了していません。"); return; }
-            if (!dbInstance) { alert("先にDBファイルを選択してください。"); return; }
-
-            currentSpeedAmount = Number.parseInt(document.getElementById('speedSelect').value, 10);
-            currentSpeedLabel = formatSpeedLabel(currentSpeedAmount);
-            // Original: log("\n--- Total Ratingを算出します ---");
-            // Reason for change: Identify the selected speed dataset in the result log.
-            log(`\n--- ${currentSpeedLabel}のTotal Ratingを算出します ---`);
-            document.getElementById('downloadBtn').disabled = true;
-            document.getElementById('saveImgBtn').disabled = true;
-            document.getElementById('shareXBtn').disabled = true; 
-            document.getElementById('resultCaptureArea').style.display = 'none';
-            document.getElementById('previewArea').style.display = 'none';
-            document.getElementById('ratingCard').style.display = 'none';
-            finalResultList = [];
-
-            try {
-                const columnsResult = dbInstance.exec("PRAGMA table_info(score);");
-                if (columnsResult.length === 0) { log("エラー: 'score' テーブルが見つかりません。", "error"); return; }
-                const dbColumns = columnsResult[0].values.map(row => row[1]);
-
-                let hashCol = dbColumns.includes('hash') ? 'hash' : (dbColumns.includes('md5') ? 'md5' : null);
-                if (!hashCol) { log("エラー: hashまたはmd5カラムが見つかりません。", "error"); return; }
-
-                const dbTargetCols = ['clear', 'perfect', 'great', 'good', 'bad', 'poor', 'totalnotes'];
-                const validCols = dbTargetCols.filter(col => dbColumns.includes(col));
-                
-                const query = `SELECT ${[hashCol].concat(validCols).join(', ')} FROM score`;
-                const dbResult = dbInstance.exec(query);
-
-                if (dbResult.length === 0 || !dbResult[0].values) {
-                    log("score テーブルにデータが存在しません。", "error");
-                    return;
-                }
-
-                const dbRows = dbResult[0].values;
-                const dbHeaders = dbResult[0].columns;
-
-                dbRows.forEach(row => {
-                    const hIdx = dbHeaders.indexOf(hashCol);
-                    const dbHash = row[hIdx] ? row[hIdx].toLowerCase() : '';
-                    const chartHash = extractChartHashForSpeed(dbHash, currentSpeedAmount);
-
-                    /* Original:
-                       if (jsonMetaMap[dbHash]) {
-                           const meta = jsonMetaMap[dbHash];
-                       Reason for change: Speed rows append "_S<amount>" to the chart MD5,
-                       so remove only the selected speed suffix before metadata lookup. */
-                    if (chartHash && jsonMetaMap[chartHash]) {
-                        const meta = jsonMetaMap[chartHash];
-                        const cIdx = dbHeaders.indexOf('clear');
-                        const clearValue = cIdx !== -1 ? row[cIdx] : 0;
-
-                        if (clearValue === 1 || clearValue === 0) return;
-
-                        let rawLevelStr = String(meta.level);
-                        let numericLevel = parseFloat(rawLevelStr.replace(/[^0-9.]/g, ''));
-                        if (isNaN(numericLevel)) numericLevel = 0;
-
-                        if (meta.type === 'st') numericLevel += 13;
-
-                        let bonus = 0;
-                        let clearText = "-";
-                        let lampClass = "";
-                        if (clearValue === 2) { bonus = 0; clearText = "EASY"; lampClass = "lamp-EASY"; }
-                        else if (clearValue === 3) { bonus = 1.2; clearText = "NORMAL"; lampClass = "lamp-NORMAL"; }
-                        else if (clearValue === 4) { bonus = 2; clearText = "HARD"; lampClass = "lamp-HARD"; } 
-                        else if (clearValue === 5) { bonus = 6; clearText = "FULLCOMBO"; lampClass = "lamp-FC"; }
-                        else return; 
-
-                        let baseValue = numericLevel + bonus;
-
-                        const getNum = (colName) => {
-                            const idx = dbHeaders.indexOf(colName);
-                            return idx !== -1 && !isNaN(parseFloat(row[idx])) ? parseFloat(row[idx]) : null;
-                        };
-
-                        const perf = getNum('perfect');
-                        const grt = getNum('great');
-                        const gd = getNum('good');
-                        const total = getNum('totalnotes');
-
-                        let scoreIndex = 1.0; 
-                        if (perf !== null && grt !== null && gd !== null && total && total > 0) {
-                            scoreIndex = (perf * 1.0 + grt * 0.9 + gd * 0.8) / total;
-                            if (scoreIndex < 0) scoreIndex = 0;
-                        }
-
-                        let finalScoreValue = baseValue * scoreIndex;
-
-                        finalResultList.push({
-                            '速度': currentSpeedLabel,
-                            '順位': 0, 
-                            '単曲レート': finalScoreValue,
-                            'スコア倍率': scoreIndex,
-                            level: meta.level, 
-                            title: meta.title,
-                            clear: clearText,
-                            lampClass: lampClass,
-                            perfect: perf !== null ? perf : "-",
-                            great: grt !== null ? grt : "-",
-                            good: gd !== null ? gd : "-",
-                            bad: getNum('bad') !== null ? getNum('bad') : "-",
-                            poor: getNum('poor') !== null ? getNum('poor') : "-",
-                            totalnotes: total !== null ? total : "-"
-                        });
-                    }
-                });
-
-                // Original: log(`有効データ: クリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
-                // Reason for change: Make it explicit that results belong to one speed dataset.
-                log(`有効データ: ${currentSpeedLabel}でクリア済みの楽曲 ${finalResultList.length} 件を計算しました。`);
-
-                if (finalResultList.length > 0) {
-                    finalResultList.sort((a, b) => b['単曲レート'] - a['単曲レート']);
-
-                    finalResultList.forEach((item, index) => {
-                        item['順位'] = index + 1;
-                    });
-
-                    let weightedSum = 0;
-                    finalResultList.forEach((item, index) => {
-                        if (index < 10) weightedSum += item['単曲レート'] * 2; 
-                        else if (index >= 10 && index < 30) weightedSum += item['単曲レート'] * 1; 
-                    });
-                    
-                    let totalRating = weightedSum / 40;
-                    currentTotalRating = totalRating.toFixed(2); 
-                    
-                    document.getElementById('resultCaptureArea').style.display = 'block';
-                    document.getElementById('ratingCard').style.display = 'block';
-                    document.getElementById('ratingTitle').innerText = `Total Rating (${currentSpeedLabel})`;
-                    document.getElementById('ratingValue').innerText = currentTotalRating;
-                    document.getElementById('previewArea').style.display = 'block';
-
-                    const tbody = document.getElementById('previewBody');
-                    tbody.innerHTML = '';
-                    
-                    finalResultList.slice(0, 30).forEach((item, index) => {
-                        const tr = document.createElement('tr');
-                        if (index < 10) tr.className = 'top10'; 
-                        
-                        // 動的にグラデーションカラーを取得
-                        let rateColor = getRateColor(item['単曲レート']);
-                        
-                        tr.innerHTML = `
-                            <td class="rank-col">${item['順位']}</td>
-                            <td style="color: ${rateColor}; font-weight: bold;">${item['単曲レート'].toFixed(2)}</td>
-                            <td class="score-idx">${item['スコア倍率'].toFixed(4)}</td>
-                            <td><b>${item.level}</b></td>
-                            <td>${item.title}</td>
-                            <td class="${item.lampClass}">${item.clear}</td>
-                            <td>${item.perfect}</td>
-                            <td>${item.great}</td>
-                            <td>${item.good}</td>
-                            <td>${item.bad}</td>
-                            <td>${item.poor}</td>
-                            <td>${item.totalnotes}</td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
-
-                    document.getElementById('downloadBtn').disabled = false;
-                    document.getElementById('saveImgBtn').disabled = false; 
-                    document.getElementById('shareXBtn').disabled = false; 
-                    log(`Total Ratingの算出に成功しました。画像保存やXへのシェアも可能です。`, "success");
-                } else {
-                    log("対象となる有効なスコアデータがありませんでした。");
-                }
-
-            } catch (err) {
-                log("エラーが発生しました: " + err.message, "error");
-                console.error(err);
-            }
-        });
-
-        // 画像保存ボタンのイベント
-        document.getElementById('saveImgBtn').addEventListener('click', function() {
-            const target = document.getElementById('resultCaptureArea');
-            if (!target) return;
-
-            log("リザルト画像を生成中...");
-            
-            html2canvas(target, {
-                scale: 2, 
-                useCORS: true,
-                backgroundColor: "#ffffff"
-            }).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const link = document.createElement('a');
-                link.href = imgData;
-                // Original: link.download = `bms_result_rating_${new Date().toISOString().slice(0,10)}.png`;
-                // Reason for change: Prevent downloaded images for different speeds from being confused.
-                link.download = `bms_result_rating_${currentSpeedLabel}_${new Date().toISOString().slice(0,10)}.png`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                log("リザルト画像をPNGファイルとして保存しました！", "success");
-            }).catch(err => {
-                log("画像生成中にエラーが発生しました: " + err.message, "error");
-                console.error(err);
-            });
-        });
-
-        // X（Twitter）シェアロジック
-        document.getElementById('shareXBtn').addEventListener('click', function() {
-            const target = document.getElementById('resultCaptureArea');
-            if (!target) return;
-
-            log("リザルトをキャプチャしてクリップボードにコピー中...");
-            
-            html2canvas(target, {
-                scale: 2, 
-                useCORS: true,
-                backgroundColor: "#ffffff"
-            }).then(canvas => {
-                canvas.toBlob(async (blob) => {
-                    try {
-                        await navigator.clipboard.write([
-                            new ClipboardItem({ "image/png": blob })
-                        ]);
-                        log("✓ 画像をクリップボードにコピーしました。(Xの投稿画面に Ctrl+V で貼り付けられます)", "success");
-                        
-                        // Original: const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\nTotal Rating: ${currentTotalRating}\nhttps://hiyasinnsu.github.io/Stella_Rating/`);
-                        // Reason for change: Include the selected speed in shared results.
-                        const shareText = encodeURIComponent(`#Stella_Rating を更新しました。\n${currentSpeedLabel} Rating: ${currentTotalRating}\nhttps://hiyasinnsu.github.io/Stella_Rating/`);
-                        const shareUrl = `https://x.com/intent/tweet?text=${shareText}`;
-                        
-                        window.open(shareUrl, '_blank');
-                    } catch (clipErr) {
-                        log("クリップボードへの画像コピーに失敗しました。ブラウザのアクセス許可を確認してください: " + clipErr.message, "error");
-                    }
-                }, 'image/png');
-            }).catch(err => {
-                log("画像生成中にエラーが発生しました: " + err.message, "error");
-            });
-        });
-
-        // CSVダウンロード
-        document.getElementById('downloadBtn').addEventListener('click', function() {
-            if (finalResultList.length === 0) return;
-            let csvContent = '\uFEFF' + allHeaders.join(',') + '\r\n';
-            finalResultList.forEach(item => {
-                const row = allHeaders.map(h => {
-                    let val = item[h];
-                    if (h === '単曲レート' && typeof val === 'number') val = val.toFixed(2);
-                    if (h === 'スコア倍率' && typeof val === 'number') val = val.toFixed(4);
-                    if (typeof val === 'string') return `"${val.replace(/"/g, '""')}"`;
-                    return val;
-                });
-                csvContent += row.join(',') + '\r\n';
-            });
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            // Original: link.download = "bms_total_rating.csv";
-            // Reason for change: Prevent CSV files for different speeds from being confused.
-            link.download = `bms_total_rating_${currentSpeedLabel}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        });
-    </script>
 </body>
 </html>
