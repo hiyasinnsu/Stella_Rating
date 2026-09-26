@@ -29,14 +29,17 @@ Satellite / Stella 難易度表の各譜面に対し、BMS-IRのリコメンド�
 6. **新SPP計算式**:
    - $\text{換算難易度 } y = f(x)$
    - $\text{最大単曲PP (Diff)} = 8.8 \times (y - 0.15)^{2.2}$
-   - $\text{単曲レート} = \text{Diff} \times \frac{\text{Acc} - 80}{20}$ (Acc 80%未満は対象外)
+   - $\text{単曲レート} = \text{Diff} \times \frac{\text{Acc} - 80}{20} \times \text{notesBonus}$ (Acc 80%未満は対象外)
    - $\text{SPP} = \sum_{i=1}^{200} \text{単曲レート}_i \times 0.95^{i-1}$
+7. **ノーツ数乗算ボーナス**:
+   - 式: $\text{notesBonus} = 1.0 + 0.1 \times \min\left(1.0, \frac{\max(0, \text{totalNotes})}{1500}\right)$
+   - 0ノーツで 1.000倍、750ノーツで 1.050倍、1500ノーツ以上で 1.100倍（上限固定）。
 
 ---
 
 ## タスク一覧（実装進捗状況）
 - [ ] **タスク1: BMS-IR APIからの推定値データ取得・ローカル保存** 【進行中・待機監視】
-  - BMS-IRサーバー側が一時的に「スナップショット生成待ち」となっているため、APIを監視・自動取得するポーリング処理を実行中。
+  - BMS-IRサーバー側が一時的に「スナップショット生成待ち／503 Service Unavailable」となっているため、APIを監視・自動取得するポーリング処理を実行中。
 - [x] **タスク2: 10段階細分化スクリプトの作成・単体テスト完了** 【完了】
   - 同値保持ルールを実装した `generate_subdivided_tables.py` を作成し、単体テストをパス（均等配分＆同値保持動作を確認）。
 - [x] **タスク3: `stella-performance-point.html`（SPP）の小数対応改修** 【完了】
@@ -48,12 +51,13 @@ Satellite / Stella 難易度表の各譜面に対し、BMS-IRのリコメンド�
 - [x] **タスク6: 換算難易度式の策定・グラフ出力** 【完了】
   - 4次多項式モデルおよびPCHIPモデルを設計・検証し、グラフ `difficulty_curve.png` を出力。
 - [x] **タスク7: `stella-performance-point.html` の新SPP計算式への更新・GitHub反映** 【完了】
-  - 根幹ロジックの改修（`diff = unified * 24 + 76` から `diff = 8.8 * (convertDifficulty(unified) - 0.15)^2.2` へ）。
-  - `convertDifficulty()` の実装。
-  - ルールに基づき既存コードのコメントアウト保持。
-  - `runSelfChecks` の新式対応更新（全24テスト項目パス）。
-  - 説明文テキストおよびレートカラー上限（1000→2000）の更新。
-  - GitHubリポジトリ (`https://github.com/hiyasinnsu/Stella_Rating`) へのコミット・プッシュ完了。
+  - 根幹ロジックの改修、`convertDifficulty()`、セルフチェック更新（全24項目パス）、GitHub反映完了。
+- [x] **タスク8: ノーツ数乗算ボーナスの導入（SPP改修・GitHub反映）** 【完了】
+  - `calculateNotesBonus` 関数の新設（0〜1500ノーツで 1.0〜1.1倍、1500ノーツ以上で 1.1倍固定）。
+  - `calculateChartRating` 内で `notesBonus` を乗算（既存コードはコメントアウト保持）。
+  - `runSelfChecks` にボーナス倍率単体テスト5件を追加し、総合期待値に反映（全29項目合格）。
+  - UI説明文テキストの更新。
+  - GitHubリポジトリ (`https://github.com/hiyasinnsu/Stella_Rating`) へのコミット・プッシュ。
 - [ ] **タスク5: 全体動作検証と整合性確認** 【タスク1取得後に実施】
 
 ---
@@ -65,3 +69,5 @@ Satellite / Stella 難易度表の各譜面に対し、BMS-IRのリコメンド�
 - 2026-09-26 23:27: 換算難易度式（sr1=0.5, sl0=4.0, st0=6.5, st6=8.0, st12=11.8）の数学的導出・検証を実施。4次多項式モデルおよびPCHIPモデルのグラフ `difficulty_curve.png` を生成。
 - 2026-09-26 23:35: ユーザー要求に基づき新SPP計算式（最大単曲PP = 8.8 * (換算難易度 - 0.15)^2.2）を策定。タスク7を追加し、既存根幹ロジック変更の説明と承認依頼を準備。
 - 2026-09-26 23:39: タスク7の実装完了。4次多項式換算関数および新Diff式の実装、UI説明文の更新、レートカラースケール拡張（2000）、全24項目のセルフチェック単体テスト合格。GitHubリポジトリ (`main` ブランチ) へのコミットおよびプッシュを完了。
+- 2026-09-26 23:55: ユーザー要求に基づきノーツ数乗算ボーナス（0〜1500ノーツで1.0〜1.1倍、1500以上1.1倍固定）の仕様を策定。タスク8を追加し、根幹ロジック変更の説明と承認依頼を準備。
+- 2026-09-26 23:57: タスク8の実装完了。`calculateNotesBonus` の実装、`calculateChartRating` への適用、UI説明文更新、全29項目の単体テスト合格、GitHubリポジトリ (`main` ブランチ) へのコミットおよびプッシュを完了。

@@ -476,8 +476,9 @@
             sr1～12 = 1～12 / sl0～12 = 13～25 / st0～12 = 26～38<br>
             換算難易度 = 統一難易度からの4次多項式換算 (sr1=0.5, sl0=4.0, st0=6.5, st6=8.0, st12=11.8)<br>
             最大単曲PP (Diff) = 8.8 × (換算難易度 − 0.15)^2.2<br>
+            ノーツ数ボーナス = 1.0 + 0.1 × min(1.0, ノーツ数 ÷ 1500) (上限1.1倍)<br>
             Acc = (PGREAT + GREAT×0.86 + GOOD×0.30) ÷ ノーツ数 × 100<br>
-            単曲レート = Diff × (Acc − 80) ÷ 20<br>
+            単曲レート = Diff × (Acc − 80) ÷ 20 × ノーツ数ボーナス<br>
             SPP = Σ 単曲レート × 0.95^(順位−1)
         </p>
     </details>
@@ -587,6 +588,13 @@
             return a * Math.pow(x, 4) + b * Math.pow(x, 3) + c * Math.pow(x, 2) + d * x + e;
         }
 
+        function calculateNotesBonus(totalNotes) {
+            // 0ノーツで1.0倍、1500ノーツで1.1倍（線形補間）、1500ノーツ以上は1.1倍固定
+            var notes = Number(totalNotes);
+            if (!Number.isFinite(notes) || notes <= 0) return 1.0;
+            return 1.0 + 0.1 * Math.min(1.0, notes / 1500);
+        }
+
         function calculateChartRating(type, rawLevel, perfect, great, good, totalNotes) {
             var rawValues = [perfect, great, good, totalNotes];
             if (rawValues.some(function (value) { return value === null || value === undefined || value === ""; })) {
@@ -617,12 +625,17 @@
             var converted = convertDifficulty(unified);
             var diff = 8.8 * Math.pow(converted - 0.15, 2.2);
 
+            /* Original:
             var rating = diff * (accRatio - 0.8) / 0.2;
+            Reason for change: Applied notes bonus multiplier (1.0 at 0 notes up to 1.1 at 1500+ notes) as requested by user. */
+            var notesBonus = calculateNotesBonus(values[3]);
+            var rating = diff * (accRatio - 0.8) / 0.2 * notesBonus;
             if (!Number.isFinite(accRatio) || !Number.isFinite(rating)) return null;
 
             return {
                 unified: unified,
                 converted: converted,
+                notesBonus: notesBonus,
                 accRatio: accRatio,
                 diff: diff,
                 rating: rating
@@ -686,12 +699,13 @@
             var below80 = calculateChartRating("sr", 1, 79, 0, 0, 100);
             var exact80Weighted = calculateChartRating("sr", 1, 5, 0, 2, 7);
             var expectedDiffSr1 = 8.8 * Math.pow(convertDifficulty(1) - 0.15, 2.2);
+            var bonus100 = calculateNotesBonus(100);
 
             /* Original:
             Math.abs(at90.rating - 50) < 1e-9,
             Math.abs(at100.rating - 100) < 1e-9,
             getRateColor(1000) === "rgb(0, 0, 128)"
-            Reason for change: Updated self checks to match new polynomial converted difficulty and 2000 color scale. */
+            Reason for change: Updated self checks to match new polynomial converted difficulty, notes bonus, and 2000 color scale. */
             var checks = [
                 integratedDifficulty("sr", 1) === 1,
                 integratedDifficulty("sr", 12) === 12,
@@ -704,9 +718,14 @@
                 Math.abs(convertDifficulty(26) - 6.5) < 1e-4,
                 Math.abs(convertDifficulty(32) - 8.0) < 1e-4,
                 Math.abs(convertDifficulty(38) - 11.8) < 1e-4,
+                calculateNotesBonus(0) === 1.0,
+                calculateNotesBonus(-5) === 1.0,
+                Math.abs(calculateNotesBonus(750) - 1.05) < 1e-9,
+                Math.abs(calculateNotesBonus(1500) - 1.1) < 1e-9,
+                Math.abs(calculateNotesBonus(2000) - 1.1) < 1e-9,
                 Math.abs(at80.rating) < 1e-9,
-                Math.abs(at90.rating - expectedDiffSr1 * 0.5) < 1e-9,
-                Math.abs(at100.rating - expectedDiffSr1) < 1e-9,
+                Math.abs(at90.rating - expectedDiffSr1 * 0.5 * bonus100) < 1e-9,
+                Math.abs(at100.rating - expectedDiffSr1 * bonus100) < 1e-9,
                 below80 === null,
                 exact80Weighted !== null && Math.abs(exact80Weighted.rating) < 1e-9,
                 rankWeight(1) === 1,
