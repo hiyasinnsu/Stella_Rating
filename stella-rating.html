@@ -230,12 +230,36 @@
                 SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/${file}` });
                 log("システム: ライブラリの初期化完了。");
 
+                /* Original:
                 log("難易度表データを自動読込中...");
                 let slCount = await loadJsonFile('sl_score.json', 'sl');
                 log(`Satellite (sl_score.json) から ${slCount} 曲登録しました。`);
                 
                 let stCount = await loadJsonFile('st_score.json', 'st');
                 log(`Stella (st_score.json) から ${stCount} 曲登録しました。`);
+                Reason for change: Prefer sl_subdivided.json and st_subdivided.json if available to use the 10-tier subdivided difficulty values, falling back to original files. */
+                log("難易度表データを自動読込中...");
+                let slFile = 'sl_subdivided.json';
+                let slCount = 0;
+                try {
+                    slCount = await loadJsonFile(slFile, 'sl');
+                    log(`Satellite (${slFile}) から ${slCount} 曲登録しました。`);
+                } catch (_) {
+                    slFile = 'sl_score.json';
+                    slCount = await loadJsonFile(slFile, 'sl');
+                    log(`Satellite (${slFile}) から ${slCount} 曲登録しました。`);
+                }
+                
+                let stFile = 'st_subdivided.json';
+                let stCount = 0;
+                try {
+                    stCount = await loadJsonFile(stFile, 'st');
+                    log(`Stella (${stFile}) から ${stCount} 曲登録しました。`);
+                } catch (_) {
+                    stFile = 'st_score.json';
+                    stCount = await loadJsonFile(stFile, 'st');
+                    log(`Stella (${stFile}) から ${stCount} 曲登録しました。`);
+                }
                 
                 isJsonReady = true;
                 log("システム準備完了。.dbファイルを選択して実行してください。", "success");

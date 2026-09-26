@@ -474,9 +474,11 @@
         <summary>計算式</summary>
         <p class="setting-note">
             sr1～12 = 1～12 / sl0～12 = 13～25 / st0～12 = 26～38<br>
+            換算難易度 = 統一難易度からの4次多項式換算 (sr1=0.5, sl0=4.0, st0=6.5, st6=8.0, st12=11.8)<br>
+            最大単曲PP (Diff) = 8.8 × (換算難易度 − 0.15)^2.2<br>
             Acc = (PGREAT + GREAT×0.86 + GOOD×0.30) ÷ ノーツ数 × 100<br>
-            Diff = 統合難易度×24 + 76 / 単曲レート = Diff×(Acc−80)÷20<br>
-            SPP = Σ 単曲レート×0.95^(順位−1)
+            単曲レート = Diff × (Acc − 80) ÷ 20<br>
+            SPP = Σ 単曲レート × 0.95^(順位−1)
         </p>
     </details>
 
@@ -546,13 +548,12 @@
 
         var tableDefinitions = [
             { file: "sr_score.json", type: "sr", label: "Starlight" },
-            { file: "sl_score.json", type: "sl", label: "Satellite" },
-            { file: "st_score.json", type: "st", label: "Stella" }
+            { file: "sl_score.json", subdividedFile: "sl_subdivided.json", type: "sl", label: "Satellite" },
+            { file: "st_score.json", subdividedFile: "st_subdivided.json", type: "st", label: "Stella" }
         ];
 
         function integratedDifficulty(type, rawLevel) {
-            /* Original: Removed every non-digit before parsing the level.
-               Reason for change: Reject malformed values such as "-1" and "1x" instead of silently treating them as valid. */
+            /* Original:
             var levelMatch = String(rawLevel).trim().toLowerCase().match(new RegExp("^(?:" + type + ")?([0-9]+)$"));
             var level = levelMatch ? Number.parseInt(levelMatch[1], 10) : NaN;
             var minimum = type === "sr" ? 1 : 0;
@@ -562,6 +563,28 @@
                 throw new Error("不正な難易度です: " + type + rawLevel);
             }
             return level + offset;
+            Reason for change: Support decimal subdivision levels (e.g. sl0.3, st1.5) in addition to integers. */
+            var levelMatch = String(rawLevel).trim().toLowerCase().match(new RegExp("^(?:" + type + ")?([0-9]+(?:\\.[0-9]+)?)$"));
+            var level = levelMatch ? Number.parseFloat(levelMatch[1]) : NaN;
+            var minimum = type === "sr" ? 1 : 0;
+            var offset = type === "sr" ? 0 : type === "sl" ? 13 : type === "st" ? 26 : NaN;
+
+            if (!Number.isFinite(level) || level < minimum || level > 12.99 || !Number.isFinite(offset)) {
+                throw new Error("不正な難易度です: " + type + rawLevel);
+            }
+            return level + offset;
+        }
+
+        function convertDifficulty(unified) {
+            // 4次多項式モデル: y = ax^4 + bx^3 + cx^2 + dx + e
+            // 通過点: sr1(x=1)->0.5, sl0(x=13)->4.0, st0(x=26)->6.5, st6(x=32)->8.0, st12(x=38)->11.8
+            var a = 2.5139612398436534e-05;
+            var b = -1.583897148007689e-03;
+            var c = 2.8635790407137817e-02;
+            var d = 0.1207869408465992;
+            var e = 0.3521360583597321;
+            var x = unified;
+            return a * Math.pow(x, 4) + b * Math.pow(x, 3) + c * Math.pow(x, 2) + d * x + e;
         }
 
         function calculateChartRating(type, rawLevel, perfect, great, good, totalNotes) {
@@ -585,12 +608,21 @@
 
             var unified = integratedDifficulty(type, rawLevel);
             var accRatio = weightedScore / (values[3] * 100);
+
+            /* Original:
             var diff = unified * 24 + 76;
+            Reason for change: Switched to user-specified formula:
+            converted = convertDifficulty(unified);
+            diff = 8.8 * (converted - 0.15)^2.2 (Max single-chart PP) */
+            var converted = convertDifficulty(unified);
+            var diff = 8.8 * Math.pow(converted - 0.15, 2.2);
+
             var rating = diff * (accRatio - 0.8) / 0.2;
             if (!Number.isFinite(accRatio) || !Number.isFinite(rating)) return null;
 
             return {
                 unified: unified,
+                converted: converted,
                 accRatio: accRatio,
                 diff: diff,
                 rating: rating
@@ -612,7 +644,12 @@
         }
 
         function getRateColor(value) {
+            /* Original:
             var v = Math.max(0, Math.min(1000, value));
+            ...
+            var position = (v / 1000) * (colors.length - 1);
+            Reason for change: Scaled maximum from 1000 to 2000 because st12 max single-chart PP is ~1951.65. */
+            var v = Math.max(0, Math.min(2000, value));
             var colors = [
                 { r: 0, g: 191, b: 255 },
                 { r: 34, g: 139, b: 34 },
@@ -625,7 +662,7 @@
                 { r: 106, g: 90, b: 205 },
                 { r: 0, g: 0, b: 128 }
             ];
-            var position = (v / 1000) * (colors.length - 1);
+            var position = (v / 2000) * (colors.length - 1);
             var index = Math.floor(position);
             var fraction = position - index;
 
@@ -648,6 +685,13 @@
             var at100 = calculateChartRating("sr", 1, 100, 0, 0, 100);
             var below80 = calculateChartRating("sr", 1, 79, 0, 0, 100);
             var exact80Weighted = calculateChartRating("sr", 1, 5, 0, 2, 7);
+            var expectedDiffSr1 = 8.8 * Math.pow(convertDifficulty(1) - 0.15, 2.2);
+
+            /* Original:
+            Math.abs(at90.rating - 50) < 1e-9,
+            Math.abs(at100.rating - 100) < 1e-9,
+            getRateColor(1000) === "rgb(0, 0, 128)"
+            Reason for change: Updated self checks to match new polynomial converted difficulty and 2000 color scale. */
             var checks = [
                 integratedDifficulty("sr", 1) === 1,
                 integratedDifficulty("sr", 12) === 12,
@@ -655,9 +699,14 @@
                 integratedDifficulty("sl", 12) === 25,
                 integratedDifficulty("st", 0) === 26,
                 integratedDifficulty("st", 12) === 38,
+                Math.abs(convertDifficulty(1) - 0.5) < 1e-4,
+                Math.abs(convertDifficulty(13) - 4.0) < 1e-4,
+                Math.abs(convertDifficulty(26) - 6.5) < 1e-4,
+                Math.abs(convertDifficulty(32) - 8.0) < 1e-4,
+                Math.abs(convertDifficulty(38) - 11.8) < 1e-4,
                 Math.abs(at80.rating) < 1e-9,
-                Math.abs(at90.rating - 50) < 1e-9,
-                Math.abs(at100.rating - 100) < 1e-9,
+                Math.abs(at90.rating - expectedDiffSr1 * 0.5) < 1e-9,
+                Math.abs(at100.rating - expectedDiffSr1) < 1e-9,
                 below80 === null,
                 exact80Weighted !== null && Math.abs(exact80Weighted.rating) < 1e-9,
                 rankWeight(1) === 1,
@@ -667,7 +716,7 @@
                 calculateTotalSpp([{ rating: 100 }, { rating: 100 }]) === 195,
                 Math.abs(calculateTotalSpp(Array.from({ length: 200 }, function () { return { rating: 1 }; })) - 19.999298946675) < 1e-12,
                 getRateColor(0) === "rgb(0, 191, 255)",
-                getRateColor(1000) === "rgb(0, 0, 128)"
+                getRateColor(2000) === "rgb(0, 0, 128)"
             ];
             if (!checks.every(Boolean)) throw new Error("計算ロジックのセルフチェックに失敗しました。");
         }
@@ -715,8 +764,25 @@
         }
 
         async function loadTable(definition) {
+            /* Original:
             var response = await fetch(definition.file);
             if (!response.ok) throw new Error(definition.file + " の読み込みに失敗しました。");
+            Reason for change: Prefer subdividedFile (e.g. sl_subdivided.json) if present, and fallback to definition.file. */
+            var targetFile = definition.subdividedFile || definition.file;
+            var response;
+            try {
+                response = await fetch(targetFile);
+                if (!response.ok && definition.subdividedFile) {
+                    response = await fetch(definition.file);
+                }
+            } catch (fetchErr) {
+                if (definition.subdividedFile) {
+                    response = await fetch(definition.file);
+                } else {
+                    throw fetchErr;
+                }
+            }
+            if (!response || !response.ok) throw new Error((definition.subdividedFile || definition.file) + " の読み込みに失敗しました。");
 
             var jsonData = await response.json();
             var items = Array.isArray(jsonData) ? jsonData : [];
